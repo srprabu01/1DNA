@@ -110,6 +110,49 @@ def search_track(title, artist):
     return None
 
 
+def enrich_normalized_batch(limit=60):
+    """Retry the previously-unmatched (enriched=-1) tracks using their NORMALIZED
+    clean_title + movie/album — the fields the ETL recovered from garbled titles.
+    Skips Shorts and non-music. Requires the normalize ETL to have run.
+
+    Marks a still-unmatched track enriched=-2 so it isn't retried forever."""
+    matched = failed = 0
+    pool = ("enriched=-1 AND clean_title IS NOT NULL AND length(clean_title)>=3 "
+            "AND COALESCE(is_short,0)=0 AND COALESCE(is_non_music,0)=0")
+    with connect() as con:
+        rows = con.execute(
+            f"SELECT id, clean_title, movie_album, artist FROM tracks WHERE {pool} LIMIT ?",
+            (limit,)).fetchall()
+    for row in rows:
+        song = row["clean_title"]
+        hit = None
+        for ctx in (row["movie_album"], row["artist"], song):
+            if ctx:
+                hit = search_track(song, ctx)
+                if hit:
+                    break
+        with connect() as con:
+            if hit:
+                genre, release = (None, None)
+                alb = hit.get("album") or {}
+                if alb.get("id"):
+                    genre, release = album_genre(alb["id"])
+                con.execute(
+                    """UPDATE tracks SET deezer_id=?, preview_url=?, genre=COALESCE(?, genre),
+                       release_date=COALESCE(release_date, ?), duration_ms=COALESCE(duration_ms, ?),
+                       enriched=1 WHERE id=?""",
+                    (hit["id"], hit.get("preview") or None, genre, release,
+                     (hit.get("duration") or 0) * 1000 or None, row["id"]))
+                matched += 1
+            else:
+                con.execute("UPDATE tracks SET enriched=-2 WHERE id=?", (row["id"],))
+                failed += 1
+        time.sleep(0.15)
+    with connect() as con:
+        remaining = con.execute(f"SELECT COUNT(*) c FROM tracks WHERE {pool}").fetchone()["c"]
+    return {"matched": matched, "failed": failed, "remaining": remaining}
+
+
 def album_genre(album_id):
     if album_id in _genre_cache:
         return _genre_cache[album_id]

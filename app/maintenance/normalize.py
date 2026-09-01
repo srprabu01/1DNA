@@ -131,10 +131,15 @@ def _looks_all_caps(s: str) -> bool:
     return len(letters) >= 3 and letters.isupper()
 
 
+_ARTIST_IS_SONG = re.compile(
+    r"\b(?:full\s+)?(?:video\s+)?song\s*$|\blyric(?:al)?(?:\s+video)?\s*$"
+    r"|\bvideo\s*$|\(extended version\)\s*$", re.I)
+
+
 def _is_song_in_artist(a: str) -> bool:
     if not a:
         return False
-    if re.search(r"(video\s*)?song\s*$|lyric(?:al)?\s*$|\(extended version\)\s*$", a, re.I):
+    if _ARTIST_IS_SONG.search(a):
         return True
     if _looks_all_caps(a) and a.strip().lower() not in _KNOWN_BANDS:
         return True
@@ -205,7 +210,7 @@ def normalize(title: str, artist: str) -> dict:
     # 7 + 8  song + artist by branch
     if art_is_song:
         # SWAPPED-PIPE: the song sits in the artist field, the movie leads the title
-        song = re.sub(r"(video\s*)?song\s*$|lyric(?:al)?\s*$|\(extended version\)\s*$", "", a, flags=re.I)
+        song = _ARTIST_IS_SONG.sub("", a)
         if not movie and "|" in wt:
             seg0 = wt.split("|", 1)[0]
             movie = _clean_movie(_YEAR_RE.sub("", _NOISE_RE.sub("", seg0)).strip(" -–—|"))
