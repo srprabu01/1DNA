@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "deepcut"
+version = "0.1.0"
+description = "A local music analysis and retrieval engine"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy",
+    "scipy",
+    "scikit-learn",
+    "librosa",
+    "soundfile",
+]
+
+[project.optional-dependencies]
+# The measured layer benefits from these; all degrade gracefully if absent.
+analysis = ["pyloudnorm", "mutagen"]
+# The semantic layer. Install the CUDA build of torch that matches your driver:
+#   pip install torch --index-url https://download.pytorch.org/whl/cu121
+semantic = ["torch", "transformers"]
+
+[project.scripts]
+deepcut = "deepcut.cli:main"
+
+[tool.setuptools]
+packages = ["deepcut"]

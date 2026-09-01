@@ -1,0 +1,1068 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Music DNA Analyzer</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<style>
+:root{
+  --bg:#0d0a12; --bg2:#171320; --panel:#181322; --panel-hi:#231b32;
+  --border:#2b2339; --border-hi:#3c3253;
+  --text:#f2eef8; --muted:#a99fbb; --faint:#726984;
+  --accent:#a855f7; --accent2:#d946ef; --accent3:#818cf8; --accent4:#f472b6; --warn:#fbbf24;
+  --pos:#34d399; --neg:#fb7185;
+  --accent-weak:rgba(168,85,247,.15);
+  --g1:#a855f7; --g2:#d946ef; --g3:#818cf8;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 18px 44px -22px rgba(120,40,200,.5);
+  --mono:ui-monospace,'SF Mono','JetBrains Mono','Cascadia Code',Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+::-webkit-scrollbar{width:12px;height:12px}
+::-webkit-scrollbar-thumb{background:#3a3150;border-radius:8px;border:3px solid transparent;background-clip:padding-box}
+::-webkit-scrollbar-thumb:hover{background:#4d4168;background-clip:padding-box}
+body{background:var(--bg);color:var(--text);font-family:'Inter','Segoe UI',system-ui,sans-serif;
+  min-height:100vh;-webkit-font-smoothing:antialiased;overflow-x:hidden;font-size:14px;letter-spacing:-.01em}
+body::before{content:"";position:fixed;top:0;left:0;right:0;height:360px;z-index:-1;pointer-events:none;
+  background:linear-gradient(180deg,rgba(168,85,247,.22),rgba(168,85,247,.05) 55%,transparent)}
+
+.app{display:flex;min-height:100vh}
+.sidebar{width:230px;flex-shrink:0;padding:18px 12px;position:sticky;top:0;height:100vh;
+  display:flex;flex-direction:column;gap:6px;border-right:1px solid var(--border);background:#080609}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:15px;padding:6px 8px 18px;letter-spacing:-.01em}
+.brand .logo{width:30px;height:30px;border-radius:8px;background:var(--accent-weak);border:1px solid var(--accent);
+  display:grid;place-items:center;color:var(--accent);flex-shrink:0}
+.brand .logo svg{width:17px;height:17px}
+.brand span{color:var(--text);line-height:1.1}
+.brand small{color:var(--faint);font-weight:500;font-size:10.5px;letter-spacing:.02em;display:block;margin-top:2px}
+#nav{display:flex;flex-direction:column;gap:1px;overflow-y:auto;flex:1;margin-top:2px}
+#nav button{display:flex;align-items:center;gap:11px;background:none;border:none;color:var(--muted);
+  padding:8px 11px;cursor:pointer;font-size:13px;border-radius:8px;text-align:left;
+  transition:background .13s,color .13s;font-weight:500;position:relative}
+#nav button .ic{width:18px;height:18px;display:grid;place-items:center;color:var(--faint);transition:color .13s}
+#nav button .ic svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+#nav button:hover{background:var(--panel-hi);color:var(--text)}
+#nav button:hover .ic{color:var(--muted)}
+#nav button.active{background:var(--accent-weak);color:var(--text)}
+#nav button.active .ic{color:var(--accent)}
+#nav button.active::before{content:"";position:absolute;left:0;top:20%;height:60%;width:2.5px;
+  border-radius:0 3px 3px 0;background:var(--accent)}
+.side-foot{padding:8px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:8px}
+
+.content{flex:1;min-width:0;display:flex;flex-direction:column}
+.topbar{display:flex;align-items:center;gap:12px;padding:15px 28px;border-bottom:1px solid var(--border);
+  position:sticky;top:0;z-index:5;backdrop-filter:blur(14px);background:rgba(13,10,18,.55)}
+.topbar h1{font-size:18px;font-weight:700;letter-spacing:-.01em}
+main{padding:24px 28px;max-width:1320px;width:100%;margin:0 auto}
+
+.grid{display:grid;gap:14px}
+.cols4{grid-template-columns:repeat(auto-fit,minmax(184px,1fr))}
+.cols3{grid-template-columns:repeat(auto-fit,minmax(258px,1fr))}
+.cols2{grid-template-columns:repeat(auto-fit,minmax(430px,1fr))}
+.section{margin-bottom:22px}
+
+.card{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:18px;
+  position:relative;transition:background .2s,border-color .2s,box-shadow .2s}
+.card:hover{background:var(--panel-hi);border-color:var(--border-hi);box-shadow:var(--shadow)}
+.card h3{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;
+  margin-bottom:12px;font-weight:600}
+.stat{background:var(--panel);border:1px solid var(--border);border-left:2px solid var(--accent);
+  border-radius:10px;padding:14px 16px;transition:background .15s,border-color .15s;position:relative}
+.stat:hover{background:var(--panel-hi)}
+.stat.a2{border-left-color:var(--accent2)} .stat.a3{border-left-color:var(--accent3)} .stat.a4{border-left-color:var(--accent4)}
+.big{font-size:27px;font-weight:700;letter-spacing:-.02em;line-height:1.15;font-variant-numeric:tabular-nums}
+.stat .ic{display:none}
+.sub{color:var(--muted);font-size:12px;margin-top:4px}
+.gtext{color:var(--accent);-webkit-text-fill-color:currentColor}
+
+button.action{background:var(--accent);color:#fff;border:1px solid transparent;border-radius:500px;
+  padding:10px 20px;font-weight:700;cursor:pointer;font-size:13px;letter-spacing:.01em;transition:transform .12s,filter .12s}
+button.action:hover{filter:brightness(1.12);transform:scale(1.04)}
+button.action.blue{background:var(--accent3)}
+button.action:disabled{opacity:.5;cursor:wait;filter:none;transform:none}
+button.ghost{background:transparent;color:var(--text);border:1px solid var(--border-hi);
+  border-radius:500px;padding:8px 16px;cursor:pointer;font-size:12.5px;font-weight:600;transition:border-color .13s,background .13s,transform .12s}
+button.ghost:hover{border-color:var(--text);background:var(--panel-hi);transform:scale(1.03)}
+button.ghost.active{border-color:var(--accent);color:var(--accent)}
+select,input[type=text],textarea{background:var(--bg2);border:1px solid var(--border);color:var(--text);
+  border-radius:8px;padding:8px 11px;font-size:13px;font-family:inherit;transition:border-color .15s,box-shadow .15s}
+select:focus,input:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-weak)}
+input[type=text]{width:300px} input[type=file]{color:var(--muted);font-size:13px}
+
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{color:var(--faint);text-align:left;padding:9px 10px;border-bottom:1px solid var(--border);
+  font-weight:600;text-transform:uppercase;font-size:10.5px;letter-spacing:.05em;white-space:nowrap}
+th.sortable{cursor:pointer;user-select:none;transition:color .13s}
+th.sortable:hover{color:var(--muted)}
+th.sorted{color:var(--accent)}
+th .caret{font-size:9px;opacity:.7}
+td{padding:9px 10px;border-bottom:1px solid var(--border);font-variant-numeric:tabular-nums}
+tbody tr{transition:background .12s}
+tbody tr:hover td{background:var(--panel-hi)}
+.tag{display:inline-block;background:var(--panel-hi);border:1px solid var(--border);
+  border-radius:500px;padding:3px 10px;font-size:11px;color:var(--muted);margin:2px;font-variant-numeric:tabular-nums}
+.bar{height:6px;background:var(--panel-hi);border-radius:4px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--accent);border-radius:4px;transition:width .7s cubic-bezier(.2,.8,.2,1)}
+.msg{font-size:13px;color:var(--accent);margin-top:10px;min-height:18px}
+.msg.err{color:var(--warn)}
+.pill{font-size:11px;padding:5px 12px;border-radius:500px;background:var(--panel-hi);border:1px solid var(--border);
+  color:var(--muted);display:flex;align-items:center;gap:6px;justify-content:center}
+.pill.ok{color:var(--pos);border-color:rgba(70,185,138,.35)}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--faint)}
+.pill.ok .dot{background:var(--pos)}
+.toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.chip{background:var(--panel-hi);border:1px solid var(--border);border-radius:500px;padding:6px 13px;
+  cursor:pointer;font-size:12px;color:var(--muted);transition:border-color .13s,color .13s,background .13s}
+.chip:hover{border-color:var(--border-hi);color:var(--text)}
+.chip.on{background:var(--accent-weak);border-color:var(--accent);color:var(--accent)}
+
+#detail{position:fixed;inset:0;background:rgba(6,7,9,.7);display:none;align-items:center;
+  justify-content:center;z-index:20;backdrop-filter:blur(4px)}
+#detail .inner{background:var(--panel);border:1px solid var(--border-hi);border-radius:14px;
+  padding:24px;width:min(720px,94vw);max-height:90vh;overflow:auto;box-shadow:0 24px 70px rgba(0,0,0,.7)}
+.featrow{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:7px 0;font-size:13px}
+.featrow .bar{flex:1}
+h2{font-size:18px;margin-bottom:4px;font-weight:700;letter-spacing:-.02em}
+audio{height:34px;width:100%;max-width:280px}
+canvas{max-height:330px}
+.moodwrap{position:relative}
+.moodwrap .q{position:absolute;font-size:10px;color:var(--faint);pointer-events:none;text-transform:uppercase;letter-spacing:.05em}
+.tab{animation:fadeUp .3s cubic-bezier(.2,.8,.2,1)}
+@keyframes fadeUp{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}
+.spin{width:15px;height:15px;border:2px solid var(--border);border-top-color:var(--accent);
+  border-radius:50%;display:inline-block;animation:spin .7s linear infinite;vertical-align:-2px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.skel{background:linear-gradient(90deg,var(--panel),var(--panel-hi),var(--panel));
+  background-size:200% 100%;animation:shimmer 1.3s infinite;border-radius:8px;height:14px}
+@keyframes shimmer{to{background-position:-200% 0}}
+@media(max-width:920px){.sidebar{width:60px}.brand span,.brand small,#nav button span:not(.ic),.side-foot .pill span{display:none}}
+</style>
+</head>
+<body>
+<div class="app">
+<aside class="sidebar">
+  <div class="brand">
+    <span class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V6l10-2v12"/><circle cx="6" cy="18" r="2.6"/><circle cx="16" cy="16" r="2.6"/></svg></span>
+    <span>Music DNA<small>Listening analytics</small></span>
+  </div>
+  <nav id="nav">
+    <button data-tab="overview" class="active"><span class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></span><span>Overview</span></button>
+    <button data-tab="dna"><span class="ic"><svg viewBox="0 0 24 24"><path d="M3 12h3.5l2.5-7 4 15 2.5-8H21"/></svg></span><span>Audio DNA</span></button>
+    <button data-tab="deepdive"><span class="ic"><svg viewBox="0 0 24 24"><path d="M4 3v17a1 1 0 0 0 1 1h16"/><circle cx="9" cy="15" r="1.3"/><circle cx="13" cy="9" r="1.3"/><circle cx="17" cy="12" r="1.3"/><circle cx="19" cy="6" r="1.3"/></svg></span><span>Deep Dive</span></button>
+    <button data-tab="research"><span class="ic"><svg viewBox="0 0 24 24"><path d="M9 3h6"/><path d="M10 3v6l-5.2 8.5A2 2 0 0 0 6.5 21h11a2 2 0 0 0 1.7-3.5L14 9V3"/><path d="M7.5 15h9"/></svg></span><span>Research</span></button>
+    <button data-tab="trends"><span class="ic"><svg viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-8"/><path d="M16 7h5v5"/></svg></span><span>Trends</span></button>
+    <button data-tab="patterns"><span class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg></span><span>Patterns</span></button>
+    <button data-tab="playlists"><span class="ic"><svg viewBox="0 0 24 24"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></svg></span><span>Playlists</span></button>
+    <button data-tab="library"><span class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/><path d="M3 14.5h18"/><path d="M9 9v11"/></svg></span><span>Library</span></button>
+    <button data-tab="recs"><span class="ic"><svg viewBox="0 0 24 24"><polygon points="12,3 14.6,9 21,9.6 16.1,13.8 17.7,20 12,16.4 6.3,20 7.9,13.8 3,9.6 9.4,9"/></svg></span><span>For You</span></button>
+    <button data-tab="discover"><span class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polygon points="15.6,8.4 11,11 8.4,15.6 13,13"/></svg></span><span>Discover</span></button>
+    <button data-tab="wrapped"><span class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="5"/><path d="M8.2 11.5L6 21l6-2.6L18 21l-2.2-9.5"/></svg></span><span>Wrapped</span></button>
+    <button data-tab="sources"><span class="ic"><svg viewBox="0 0 24 24"><path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 0 1 0 10h-2"/><path d="M8.5 12h7"/></svg></span><span>Sources</span></button>
+  </nav>
+  <div class="side-foot">
+    <span id="conn" class="pill"><span class="dot"></span><span>checking…</span></span>
+  </div>
+</aside>
+<div class="content">
+<div class="topbar">
+  <h1 id="pageTitle">Overview</h1>
+  <div style="flex:1"></div>
+  <button class="ghost" onclick="refreshAll()">↻ Refresh</button>
+</div>
+<main>
+
+<div id="tab-overview" class="tab">
+  <div class="grid cols4 section" id="statCards"></div>
+  <div class="grid cols2">
+    <div class="card"><h3>Top artists</h3><canvas id="topArtistsChart"></canvas></div>
+    <div class="card"><h3>Genre universe</h3><canvas id="genreChart"></canvas></div>
+    <div class="card"><h3>Release eras</h3><canvas id="eraChart"></canvas></div>
+    <div class="card"><h3>Listening over time</h3><canvas id="monthlyChart"></canvas></div>
+  </div>
+</div>
+
+<div id="tab-dna" class="tab" style="display:none">
+  <div class="section card" id="dnaSummary"></div>
+  <div class="grid cols2">
+    <div class="card"><h3>Your audio profile</h3><canvas id="radarChart"></canvas></div>
+    <div class="card"><h3>Key distribution</h3><canvas id="keyChart"></canvas></div>
+    <div class="card" style="grid-column:1/-1"><h3>Feature distributions across your library</h3><canvas id="histChart"></canvas></div>
+  </div>
+  <div class="section card" style="margin-top:16px" id="lyricsPanel">
+    <h3>Lyrics layer</h3>
+    <div id="lyricsBody"><p class="sub">No lyrics analyzed yet — run “Fetch lyrics” in Sources.</p></div>
+  </div>
+</div>
+
+<div id="tab-deepdive" class="tab" style="display:none">
+  <div class="section card">
+    <h3>Mood map — every track by valence &amp; energy</h3>
+    <p class="sub" style="margin-bottom:10px">Bubble size = play count · colour = mood quadrant · click any track to open its full DNA.</p>
+    <div class="moodwrap">
+      <span class="q" style="top:6px;left:12px">Tense · intense</span>
+      <span class="q" style="top:6px;right:12px">Energetic · happy</span>
+      <span class="q" style="bottom:26px;left:12px">Melancholic · sad</span>
+      <span class="q" style="bottom:26px;right:12px">Calm · content</span>
+      <canvas id="moodMap" style="max-height:440px"></canvas>
+    </div>
+  </div>
+  <div class="grid cols2">
+    <div class="card"><h3>Tempo landscape (BPM)</h3><canvas id="tempoChart"></canvas></div>
+    <div class="card"><h3>Camelot / key wheel</h3><canvas id="keyWheelChart"></canvas></div>
+    <div class="card" style="grid-column:1/-1"><h3>Feature correlations — how your sonic traits move together</h3>
+      <p class="sub" style="margin-bottom:10px">Pearson correlation across your analyzed library. Purple = move together, rose = opposed.</p>
+      <div id="corrHeat" style="overflow-x:auto"></div></div>
+  </div>
+</div>
+
+<div id="tab-research" class="tab" style="display:none">
+  <div class="section card">
+    <h3>Deep research — a full statistical study of your library</h3>
+    <p class="sub" style="margin-bottom:12px">PCA sonic map, artist signatures, similarity network, era drift, loudness-war audit, and auto-written findings — computed live from your analyzed tracks.</p>
+    <button class="action" id="researchBtn" onclick="runResearch()">Run deep research</button>
+    <div class="msg" id="researchMsg"></div>
+  </div>
+  <div id="researchOut"></div>
+</div>
+
+<div id="tab-trends" class="tab" style="display:none">
+  <div class="grid cols4 section" id="trendCards"></div>
+  <div class="grid cols2">
+    <div class="card"><h3>Mood over time (valence &amp; energy)</h3><canvas id="moodChart"></canvas></div>
+    <div class="card"><h3>Discovery — new artists &amp; tracks / month</h3><canvas id="discoveryChart"></canvas></div>
+    <div class="card" style="grid-column:1/-1"><h3>Listening calendar</h3><div id="calendar" style="overflow-x:auto"></div></div>
+  </div>
+  <div class="section" style="margin-top:16px">
+    <div style="display:flex;gap:12px;align-items:center;margin-bottom:12px">
+      <h3 style="font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.09em;font-weight:700">Smart clusters (auto mood groups)</h3>
+      <select id="kSelect" onchange="loadClusters()">
+        <option value="3">3 clusters</option><option value="4" selected>4 clusters</option>
+        <option value="5">5 clusters</option><option value="6">6 clusters</option></select>
+    </div>
+    <div class="grid cols2" id="clusters"></div>
+  </div>
+</div>
+
+<div id="tab-patterns" class="tab" style="display:none">
+  <div class="grid cols2">
+    <div class="card"><h3>Listening clock (by hour)</h3><canvas id="clockChart"></canvas></div>
+    <div class="card"><h3>By weekday</h3><canvas id="dowChart"></canvas></div>
+    <div class="card" style="grid-column:1/-1"><h3>Week × hour heatmap</h3><div id="heatmap" style="overflow-x:auto"></div></div>
+  </div>
+</div>
+
+<div id="tab-playlists" class="tab" style="display:none">
+  <div class="section card">
+    <h3>Analyze a playlist</h3>
+    <p class="sub" style="margin-bottom:12px">Build one from your library, or import a real one from a connected account — then open it for full energy-arc &amp; harmonic-flow analysis.</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <button class="action" onclick="buildPl('top')">＋ Most played</button>
+      <button class="ghost" onclick="buildPl('recent')">＋ Recently played</button>
+      <button class="ghost" onclick="buildPl('source','spotify')">＋ From Spotify</button>
+      <button class="ghost" onclick="buildPl('source','ytmusic')">＋ From YT Music</button>
+      <button class="ghost" onclick="importPl('spotify')">⤓ Import Spotify…</button>
+      <button class="ghost" onclick="importPl('ytmusic')">⤓ Import YT Music…</button>
+    </div>
+    <div class="msg" id="plMsg"></div>
+  </div>
+  <div class="grid cols2" id="plList"></div>
+  <div id="plDetail" style="margin-top:20px"></div>
+</div>
+
+<div id="tab-library" class="tab" style="display:none">
+  <div class="section toolbar">
+    <input type="text" id="searchBox" placeholder="Search title or artist…" oninput="debounceSearch()">
+    <select id="libGenre" onchange="renderLib()"><option value="">All genres</option></select>
+    <select id="libAnalyzed" onchange="renderLib()">
+      <option value="">All tracks</option><option value="1">Analyzed</option><option value="0">Not analyzed</option></select>
+    <button class="ghost" id="dedupeBtn" onclick="dedupe()" title="Combine duplicate rows of the same song so play counts are correct" style="margin-left:auto">Merge duplicates</button>
+    <span class="sub" id="libCount"></span>
+  </div>
+  <div class="msg" id="dedupeMsg" style="margin-top:-8px;margin-bottom:14px;min-height:0"></div>
+  <div class="card" style="padding:6px 6px"><table id="libTable">
+    <thead><tr>
+      <th class="sortable" data-key="title" data-type="s">Title</th>
+      <th class="sortable" data-key="artist" data-type="s">Artist</th>
+      <th class="sortable" data-key="genre" data-type="s">Genre</th>
+      <th class="sortable" data-key="plays" data-type="n">Plays</th>
+      <th class="sortable" data-key="bpm" data-type="n">BPM</th>
+      <th class="sortable" data-key="camelot" data-type="s">Key</th>
+      <th class="sortable" data-key="energy" data-type="n">Energy</th>
+      <th class="sortable" data-key="valence" data-type="n">Valence</th>
+    </tr></thead>
+    <tbody></tbody></table></div>
+</div>
+
+<div id="tab-recs" class="tab" style="display:none">
+  <div class="section" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+    <button class="action" id="genRecsBtn" onclick="genRecs()">Generate recommendations</button>
+    <span class="sub">Walks related-artist graphs from your top artists, then ranks by audio-feature similarity to your taste vector.</span>
+  </div>
+  <div class="msg" id="recsMsg"></div>
+  <div class="grid cols3" id="recsGrid"></div>
+</div>
+
+<div id="tab-discover" class="tab" style="display:none">
+  <div class="section card">
+    <h3>Semantic search <span class="sub" style="text-transform:none">— describe a vibe, get songs (CLAP audio-text model)</span></h3>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:6px">
+      <input type="text" id="semQ" placeholder='e.g. "murky guitar for a rainy Sunday", "euphoric build, no vocals"' style="flex:1;min-width:320px" onkeydown="if(event.key==='Enter')semSearch()">
+      <button class="action" onclick="semSearch()">Search</button>
+    </div>
+    <div id="semStatus" class="sub" style="margin-top:8px"></div>
+    <div class="grid cols3" id="semResults" style="margin-top:12px"></div>
+  </div>
+
+  <div class="grid cols2">
+    <div class="card">
+      <h3>Your taste model</h3>
+      <p class="sub" style="margin-bottom:10px">A probe trained on your play history — learns what separates your heavy rotation from the rest, then scores every track.</p>
+      <button class="action" id="tasteBtn" onclick="fitTaste()">Fit taste model</button>
+      <div class="msg" id="tasteMsg"></div>
+      <div id="tasteDrivers" style="margin-top:10px"></div>
+    </div>
+    <div class="card">
+      <h3>Recommendation debiasing</h3>
+      <p class="sub" style="margin-bottom:10px">How much your "similar tracks" were just a popularity chart — and how much the debiasing (deepcut-derived) removed.</p>
+      <div id="debiasBox"><span class="spin"></span></div>
+    </div>
+  </div>
+
+  <div class="grid cols2" style="margin-top:16px">
+    <div class="card"><h3>Top by your taste</h3><div id="tasteTop"><p class="sub">Fit the taste model above.</p></div></div>
+    <div class="card"><h3>Hidden gems <span class="sub" style="text-transform:none">— high taste score, barely played</span></h3><div id="tasteGems"><p class="sub">Fit the taste model above.</p></div></div>
+  </div>
+</div>
+
+<div id="tab-wrapped" class="tab" style="display:none">
+  <div class="section" style="display:flex;gap:12px;align-items:center">
+    <h3 style="font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.09em;font-weight:700">Your Wrapped</h3>
+    <select id="wrappedYear" onchange="loadWrapped()"></select>
+  </div>
+  <div id="wrapped"></div>
+</div>
+
+<div id="tab-sources" class="tab" style="display:none">
+  <div class="grid cols2">
+    <div class="card">
+      <h3>Spotify</h3>
+      <p class="sub" id="spHint" style="margin-bottom:10px">Sign in with your Spotify account.</p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <button class="action" onclick="location.href='/api/spotify/login'">Sign in with Spotify</button>
+        <button class="action blue" id="syncBtn" onclick="spotifySync()">Sync now</button>
+      </div>
+      <details style="margin-top:12px"><summary class="sub" style="cursor:pointer">Advanced: keyless login (no app registration)</summary>
+        <div style="margin-top:10px">
+          <p class="sub" style="margin-bottom:6px">Paste your <b>sp_dc</b> cookie (DevTools → Application → Cookies → open.spotify.com).</p>
+          <textarea id="spDc" placeholder="paste sp_dc cookie value" style="width:100%;height:46px"></textarea>
+          <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap">
+            <button class="ghost" id="spCookieBtn" onclick="spotifyCookie()">Use cookie</button>
+            <button class="ghost" onclick="$('spBearerWrap').style.display=$('spBearerWrap').style.display==='none'?'block':'none'">Token…</button>
+          </div>
+          <div id="spBearerWrap" style="display:none;margin-top:8px">
+            <textarea id="spBearer" placeholder="paste Bearer token (~1h)" style="width:100%;height:40px"></textarea>
+            <button class="ghost" onclick="spotifyBearer()" style="margin-top:6px">Use token</button>
+          </div>
+        </div>
+      </details>
+      <details style="margin-top:8px"><summary class="sub" style="cursor:pointer">＋ Import full streaming history (data export)</summary>
+        <div style="margin-top:8px">
+          <p class="sub" style="margin-bottom:6px">From <b>spotify.com/account/privacy</b> → request <b>Extended streaming history</b> → unzip → select all <b>Streaming_History_Audio_*.json</b> files. Counts every play.</p>
+          <input type="file" id="spHistFile" accept=".json" multiple>
+          <button class="ghost" onclick="importMulti('spotify','spHistFile','spotifyMsg')" style="margin-top:6px">Import history</button>
+        </div>
+      </details>
+      <div class="msg" id="spotifyMsg"></div>
+    </div>
+    <div class="card">
+      <h3>YouTube</h3>
+      <p class="sub" id="ytHint" style="margin-bottom:10px">Sign in with Google — pulls your liked music, playlists &amp; subscribed artists.</p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <button class="action" onclick="location.href='/api/youtube/login'">Sign in with Google</button>
+        <button class="action blue" id="ytDataSyncBtn" onclick="ytDataSync()">Sync now</button>
+      </div>
+      <div class="sub" style="margin-top:8px">Note: Google exposes no API for listening <i>history</i> — add that below (optional).</div>
+      <details style="margin-top:12px"><summary class="sub" style="cursor:pointer">＋ Add live listening history (paste headers)</summary>
+        <div style="margin-top:8px">
+          <p class="sub" style="margin-bottom:6px">On <b>music.youtube.com</b> (logged in): F12 → Network → filter <b>browse</b> → click an album → right-click the <b>browse?...</b> request → Copy → <b>Copy request headers</b> → paste here. <b>Songs &amp; music videos kept; podcasts/normal videos filtered.</b></p>
+          <textarea id="ytHeaders" placeholder="paste request headers block" style="width:100%;height:64px;font-family:monospace;font-size:12px"></textarea>
+          <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap">
+            <button class="ghost" id="ytAuthBtn" onclick="ytAuth()">Use headers</button>
+            <button class="ghost" id="ytSyncBtn" onclick="ytSync()">Sync history</button>
+          </div>
+        </div>
+      </details>
+      <details style="margin-top:8px"><summary class="sub" style="cursor:pointer">or import a Google Takeout watch-history.json</summary>
+        <div style="margin-top:6px"><input type="file" id="ytFile" accept=".json">
+          <button class="ghost" onclick="importFile('youtube','ytFile','ytMsg')">Import Takeout</button></div>
+      </details>
+      <div class="msg" id="ytMsg"></div>
+    </div>
+    <div class="card">
+      <h3>Apple Music (privacy export import)</h3>
+      <p class="sub" style="margin-bottom:12px">Upload <b>Play History Daily Tracks.csv</b> or <b>Play Activity.csv</b> from privacy.apple.com.</p>
+      <input type="file" id="apFile" accept=".csv">
+      <button class="ghost" onclick="importFile('apple','apFile','apMsg')">Import</button>
+      <div class="msg" id="apMsg"></div>
+    </div>
+    <div class="card">
+      <h3>Processing pipeline</h3>
+      <p class="sub" style="margin-bottom:12px">1) Match to Deezer → 2) signal-analyze → 3) optional lyrics. Run in batches or Auto.</p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <button class="action blue" id="enrichBtn" onclick="enrich()">1 · Match metadata</button>
+        <button class="action" id="analyzeBtn" onclick="analyze()">2 · Analyze audio</button>
+        <button class="ghost" id="lyricsBtn" onclick="fetchLyrics()">3 · Fetch lyrics</button>
+        <button class="ghost" id="autoBtn" onclick="toggleAuto()">▶ Auto-process all</button>
+        <button class="ghost" id="retryBtn" onclick="analyze(true)">↻ Retry failed</button>
+      </div>
+      <div class="msg" id="procMsg"></div>
+      <div style="border-top:1px solid var(--border);margin-top:16px;padding-top:14px">
+        <button class="ghost" onclick="clearData()" style="color:var(--warn);border-color:rgba(224,164,88,.35)">Clear all data</button>
+        <span class="sub">Wipe everything to start fresh with your own accounts.</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+</main>
+</div>
+</div>
+
+<div id="detail" onclick="if(event.target===this)this.style.display='none'">
+  <div class="inner" id="detailInner"></div>
+</div>
+
+<script>
+Chart.defaults.color='#a99fbb';Chart.defaults.borderColor='rgba(255,255,255,.06)';
+Chart.defaults.font.family="'Inter','Segoe UI',sans-serif";
+Chart.defaults.font.size=11;
+Chart.defaults.animation={duration:600,easing:'easeOutQuart'};
+Chart.defaults.plugins.legend.labels.usePointStyle=true;
+Chart.defaults.plugins.legend.labels.boxWidth=8;
+Chart.defaults.plugins.tooltip.backgroundColor='#231b32';
+Chart.defaults.plugins.tooltip.borderColor='#3c3253';
+Chart.defaults.plugins.tooltip.borderWidth=1;
+Chart.defaults.plugins.tooltip.padding=10;
+Chart.defaults.plugins.tooltip.cornerRadius=8;
+Chart.defaults.plugins.tooltip.titleColor='#f2eef8';
+Chart.defaults.plugins.tooltip.bodyColor='#a99fbb';
+const PAL=['#a855f7','#d946ef','#818cf8','#f472b6','#22d3ee','#fbbf24','#34d399','#c084fc','#fb7185','#8b5cf6','#e879f9','#f0abfc'];
+const $=id=>document.getElementById(id);
+const api=async(p,opt)=>{const r=await fetch(p,opt);if(!r.ok){const e=await r.json().catch(()=>({detail:r.statusText}));throw new Error(e.detail||r.statusText)}return r.json()};
+const charts={};
+function mkChart(id,cfg){if(charts[id])charts[id].destroy();charts[id]=new Chart($(id),cfg);return charts[id]}
+// Flat solid fills — cleaner than gradients, and Chart.js cannot animate a
+// scriptable backgroundColor to a CanvasGradient (throws, aborting all charts).
+function gfill(ctx,c1,c2){return c1}
+const esc=s=>(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fbar=v=>v==null?'':`<div class="bar" style="width:64px"><i style="width:${Math.round(v*100)}%"></i></div>`;
+const pct=v=>v==null?'–':Math.round(v*100)+'%';
+
+const TITLES={overview:'Overview',dna:'Audio DNA',deepdive:'Deep Dive',research:'Deep Research',trends:'Trends',patterns:'Patterns',playlists:'Playlists',library:'Library',recs:'For You',discover:'Discover',wrapped:'Wrapped',sources:'Sources & Import'};
+const lazy={deepdive:loadDeepDive,trends:loadTrends,playlists:loadPlaylists,discover:loadDiscover,wrapped:loadWrapped};
+document.querySelectorAll('#nav button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('#nav button').forEach(x=>x.classList.remove('active'));
+  b.classList.add('active');
+  document.querySelectorAll('.tab').forEach(t=>t.style.display='none');
+  const el=$('tab-'+b.dataset.tab);el.style.display='block';
+  el.style.animation='none';el.offsetHeight;el.style.animation='';
+  $('pageTitle').textContent=TITLES[b.dataset.tab];
+  if(lazy[b.dataset.tab])lazy[b.dataset.tab]();
+  // Charts built while their tab was hidden come up 0-sized; resize once visible.
+  requestAnimationFrame(()=>Object.values(charts).forEach(c=>{try{c.resize()}catch(e){}}));
+});
+
+function animateCounts(){
+  document.querySelectorAll('.count[data-to]').forEach(el=>{
+    const to=parseFloat(el.dataset.to),dec=(el.dataset.dec|0),dur=750;
+    const fmt=v=>v.toLocaleString(undefined,{maximumFractionDigits:dec,minimumFractionDigits:dec});
+    el.textContent=fmt(to);           // correct value up-front (survives paused rAF)
+    if(document.visibilityState!=='visible')return;   // skip animation when hidden
+    let t0=null;
+    const step=ts=>{if(!t0)t0=ts;const p=Math.min((ts-t0)/dur,1);const e=1-Math.pow(1-p,3);
+      el.textContent=fmt(to*e);if(p<1)requestAnimationFrame(step)};
+    requestAnimationFrame(step);
+  });
+}
+
+async function refreshAll(){
+  try{
+    const st=await api('/api/status');
+    const on=st.spotify_connected||st.ytmusic_connected;
+    $('conn').className='pill'+(on?' ok':'');
+    $('conn').innerHTML=`<span class="dot"></span><span>${st.spotify_connected?'Spotify':''}${st.spotify_connected&&st.ytmusic_connected?' + ':''}${st.ytmusic_connected?'YT Music':''}${on?' live':'not connected'}</span>`;
+    if($('spHint'))$('spHint').innerHTML=st.spotify_oauth_ready?'One click to sign in with your Spotify account.':'⚠ One-time setup: create a free Spotify app &amp; add its Client ID/Secret to <b>.env</b> (see README) — then this button works. Or use Advanced keyless login.';
+    if($('ytHint'))$('ytHint').innerHTML=st.youtube_oauth_ready?'Sign in with Google — pulls your liked music, playlists &amp; subscribed artists.':'⚠ One-time setup needed (Web OAuth client in Google Cloud) — see README. Or use the header/Takeout options below.';
+    renderOverview(st.overview);
+    loadCharts();loadDNA();loadLyrics();loadPatterns();searchLib();loadRecs();
+  }catch(e){console.error(e)}
+}
+
+function renderOverview(o){
+  const cards=[
+    ['🎵','Total plays',o.plays,0,''],['💿','Unique tracks',o.tracks,0,'a2'],
+    ['🎤','Artists',o.artists,0,'a3'],['⏱️','Listening hours',o.listening_hours,1,'a4'],
+    ['🔗','Matched',o.enriched,0,'a2'],['🧬','Analyzed',o.analyzed,0,''],
+  ];
+  $('statCards').innerHTML=cards.map(([ic,t,v,dec,cls])=>`<div class="stat ${cls}"><span class="ic">${ic}</span>
+    <div class="big count" data-to="${v||0}" data-dec="${dec}">0</div><div class="sub">${t}</div></div>`).join('')
+    +`<div class="stat"><span class="ic">📡</span><div class="sub" style="margin-top:2px">${(o.by_source||[]).map(s=>`<span class="tag">${s.source} ${s.plays}</span>`).join('')||'no sources yet'}</div></div>`;
+  animateCounts();
+}
+
+async function loadCharts(){
+  const [arts,gen,pat]=await Promise.all([api('/api/stats/top?kind=artists&limit=12'),api('/api/stats/genres'),api('/api/stats/patterns')]);
+  mkChart('topArtistsChart',{type:'bar',data:{labels:arts.map(a=>a.name),datasets:[{label:'plays',data:arts.map(a=>a.plays),
+    backgroundColor:c=>gfill(c.chart.ctx,'#a855f7','#3a63c9'),borderRadius:6,barThickness:'flex'}]},
+    options:{indexAxis:'y',plugins:{legend:{display:false}}}});
+  mkChart('genreChart',{type:'doughnut',data:{labels:gen.distribution.map(g=>g.genre),datasets:[{data:gen.distribution.map(g=>g.plays),
+    backgroundColor:PAL,borderWidth:2,borderColor:'#0a0b0d',hoverOffset:8}]},options:{cutout:'62%',plugins:{legend:{position:'right',labels:{boxWidth:8,font:{size:11}}}}}});
+  mkChart('eraChart',{type:'bar',data:{labels:gen.eras.map(e=>e.era),datasets:[{label:'plays',data:gen.eras.map(e=>e.plays),
+    backgroundColor:c=>gfill(c.chart.ctx,'#818cf8','#237e70'),borderRadius:6}]},options:{plugins:{legend:{display:false}}}});
+  mkChart('monthlyChart',{type:'line',data:{labels:pat.monthly.map(m=>m.month),datasets:[
+    {label:'plays',data:pat.monthly.map(m=>m.plays),borderColor:'#a855f7',backgroundColor:c=>gfill(c.chart.ctx,'rgba(168,85,247,.35)','rgba(168,85,247,0)'),fill:true,tension:.4,pointRadius:2},
+    {label:'unique tracks',data:pat.monthly.map(m=>m.unique_tracks),borderColor:'#a78bfa',tension:.4,pointRadius:2}]},
+    options:{plugins:{legend:{labels:{boxWidth:8}}}}});
+}
+
+async function loadDNA(){
+  const p=await api('/api/stats/audio-profile');
+  if(!p.available){$('dnaSummary').innerHTML='<h3>Audio DNA</h3><p class="sub">No tracks analyzed yet. Go to <b>Sources</b> → run the processing pipeline.</p>';return}
+  $('dnaSummary').innerHTML=`<h3>Audio DNA — from ${p.n_analyzed} signal-analyzed tracks (play-weighted)</h3>
+    <div style="display:flex;gap:34px;flex-wrap:wrap;margin-top:8px">
+    <div><div class="big gtext count" data-to="${p.avg_bpm||0}" data-dec="1">0</div><div class="sub">avg BPM</div></div>
+    <div><div class="big">${p.avg_loudness??'–'}<span style="font-size:16px"> dB</span></div><div class="sub">avg loudness</div></div>
+    <div><div class="big count" data-to="${Math.round((p.diversity||0)*100)}">0</div><div class="sub">taste diversity</div></div>
+    <div><div class="big" style="font-size:19px;padding-top:9px">${p.mood_quadrant??''}</div><div class="sub">dominant mood</div></div></div>`;
+  animateCounts();
+  const cols=Object.keys(p.profile);
+  mkChart('radarChart',{type:'radar',data:{labels:cols,datasets:[{label:'you',data:cols.map(c=>p.profile[c]),
+    borderColor:'#a855f7',backgroundColor:'rgba(168,85,247,.22)',pointBackgroundColor:'#a855f7'}]},
+    options:{scales:{r:{min:0,max:1,grid:{color:'rgba(255,255,255,.08)'},angleLines:{color:'rgba(255,255,255,.08)'},pointLabels:{font:{size:11}}}}}});
+  const keys=Object.keys(p.keys);
+  mkChart('keyChart',{type:'bar',data:{labels:keys,datasets:[{label:'plays',data:keys.map(k=>p.keys[k]),
+    backgroundColor:c=>gfill(c.chart.ctx,'#a78bfa','#7b6bd0'),borderRadius:6}]},options:{plugins:{legend:{display:false}}}});
+  const buckets=[...Array(10).keys()].map(i=>(i/10).toFixed(1));
+  const cm={energy:'#e0607e',danceability:'#a855f7',valence:'#e0a458',acousticness:'#818cf8',brightness:'#e6c05c'};
+  mkChart('histChart',{type:'bar',data:{labels:buckets,datasets:Object.entries(p.histograms).map(([k,v])=>({label:k,data:v,backgroundColor:cm[k]||'#a99fbb',borderRadius:4}))},options:{}});
+}
+
+/* ---------- Deep Dive (advanced) ---------- */
+let ddTracks=null;
+async function loadDeepDive(){
+  ddTracks=await api('/api/tracks?limit=600');
+  const A=ddTracks.filter(t=>t.energy!=null&&t.valence!=null);
+  // Mood map bubble
+  const color=t=>t.valence>=.5&&t.energy>=.5?'#e0a458':t.energy>=.5?'#e0607e':t.valence>=.5?'#818cf8':'#a78bfa';
+  const pts=A.map(t=>({x:t.valence,y:t.energy,r:5+Math.min(20,Math.sqrt(t.plays||1)*2.4),t}));
+  mkChart('moodMap',{type:'bubble',data:{datasets:[{data:pts,backgroundColor:pts.map(p=>color(p.t)+'bb'),borderColor:'#0a0b0d',borderWidth:1}]},
+    options:{onClick:(e,el)=>{if(el.length)showDetail(pts[el[0].index].t.id)},
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>{const t=pts[c.dataIndex].t;return `${t.title} — ${t.artist}  ·  val ${t.valence} / en ${t.energy} · ${t.plays} plays`}}}},
+      scales:{x:{min:0,max:1,title:{display:true,text:'VALENCE  (sad → happy)',color:'#726984',font:{size:10}},grid:{color:'rgba(255,255,255,.05)'}},
+              y:{min:0,max:1,title:{display:true,text:'ENERGY  (calm → intense)',color:'#726984',font:{size:10}},grid:{color:'rgba(255,255,255,.05)'}}}}});
+  // Tempo histogram
+  const bins=Array(15).fill(0),lo=50;
+  A.forEach(t=>{if(t.bpm){const i=Math.min(14,Math.max(0,Math.floor((t.bpm-lo)/10)));bins[i]++}});
+  mkChart('tempoChart',{type:'bar',data:{labels:bins.map((_,i)=>lo+i*10),datasets:[{label:'tracks',data:bins,
+    backgroundColor:c=>gfill(c.chart.ctx,'#818cf8','#a78bfa'),borderRadius:5}]},options:{plugins:{legend:{display:false}},scales:{x:{title:{display:true,text:'BPM',color:'#726984',font:{size:10}}}}}});
+  // Key wheel (polar over 12 pitch classes)
+  const KEYS=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'],kc=Object.fromEntries(KEYS.map(k=>[k,0]));
+  A.forEach(t=>{if(t.key&&kc[t.key]!=null)kc[t.key]+=t.plays||1});
+  mkChart('keyWheelChart',{type:'polarArea',data:{labels:KEYS,datasets:[{data:KEYS.map(k=>kc[k]),backgroundColor:PAL.map(c=>c+'cc'),borderColor:'#0a0b0d',borderWidth:1}]},
+    options:{scales:{r:{grid:{color:'rgba(255,255,255,.08)'},ticks:{display:false}}},plugins:{legend:{position:'right',labels:{boxWidth:8,font:{size:10}}}}}});
+  renderCorr(A);
+}
+function pearson(a,b){const n=a.length;if(n<3)return 0;const ma=a.reduce((x,y)=>x+y,0)/n,mb=b.reduce((x,y)=>x+y,0)/n;
+  let num=0,da=0,db=0;for(let i=0;i<n;i++){const x=a[i]-ma,y=b[i]-mb;num+=x*y;da+=x*x;db+=y*y}
+  return da&&db?num/Math.sqrt(da*db):0}
+function renderCorr(A){
+  const F=['energy','danceability','valence','acousticness','brightness','instrumentalness'];
+  const cols=F.map(f=>A.map(t=>t[f]).filter(v=>v!=null));
+  // align rows where all present
+  const rows=A.filter(t=>F.every(f=>t[f]!=null));
+  const data=F.map(f=>rows.map(t=>t[f]));
+  if(rows.length<3){$('corrHeat').innerHTML='<p class="sub">Need more analyzed tracks for correlations.</p>';return}
+  const cell=v=>{const a=Math.abs(v);const c=v>=0?`rgba(168,85,247,${a.toFixed(2)})`:`rgba(224,96,126,${a.toFixed(2)})`;
+    return `<td style="text-align:center;background:${c};color:${a>.5?'#0a1020':'#f2eef8'};font-size:11px;padding:9px 6px;border-radius:4px">${v.toFixed(2)}</td>`};
+  let html='<table style="border-collapse:separate;border-spacing:3px"><tr><th></th>'+F.map(f=>`<th style="font-size:9.5px">${f.slice(0,6)}</th>`).join('')+'</tr>';
+  F.forEach((f,i)=>{html+=`<tr><th style="font-size:10px;text-align:right;padding-right:8px">${f}</th>`+
+    F.map((_,j)=>cell(pearson(data[i],data[j]))).join('')+'</tr>'});
+  $('corrHeat').innerHTML=html+'</table>';
+}
+
+async function loadPatterns(){
+  const p=await api('/api/stats/patterns');
+  const hours=[...Array(24).keys()];
+  const hmap=Object.fromEntries(p.by_hour.map(h=>[h.hour,h.plays]));
+  mkChart('clockChart',{type:'polarArea',data:{labels:hours.map(h=>h+'h'),datasets:[{data:hours.map(h=>hmap[h]||0),
+    backgroundColor:hours.map(h=>{const v=(hmap[h]||0);return `rgba(168,85,247,${0.25+0.6*Math.min(1,v/Math.max(1,Math.max(...Object.values(hmap))))})`}),borderColor:'#0a0b0d',borderWidth:1}]},
+    options:{scales:{r:{grid:{color:'rgba(255,255,255,.07)'},ticks:{display:false}}},plugins:{legend:{display:false}}}});
+  const days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const dmap=Object.fromEntries(p.by_weekday.map(d=>[d.day,d.plays]));
+  mkChart('dowChart',{type:'bar',data:{labels:days,datasets:[{label:'plays',data:days.map((_,i)=>dmap[i]||0),
+    backgroundColor:c=>gfill(c.chart.ctx,'#818cf8','#237e70'),borderRadius:6}]},options:{plugins:{legend:{display:false}}}});
+  const grid={};let max=1;
+  p.heatmap.forEach(c=>{grid[c.day+'_'+c.hour]=c.plays;max=Math.max(max,c.plays)});
+  $('heatmap').innerHTML='<table style="font-size:11px"><tr><th></th>'+hours.map(h=>`<th style="padding:3px;font-weight:500">${h}</th>`).join('')+'</tr>'+
+    days.map((d,di)=>'<tr><td style="padding:3px;color:var(--muted)">'+d+'</td>'+hours.map(h=>{
+      const v=grid[di+'_'+h]||0;const a=v/max;
+      return `<td title="${d} ${h}:00 — ${v} plays" style="padding:1px"><div style="width:26px;height:20px;border-radius:4px;background:${v?`rgba(168,85,247,${(0.12+0.88*a).toFixed(2)})`:'rgba(255,255,255,.03)'}"></div></td>`}).join('')+'</tr>').join('')+'</table>';
+}
+
+let searchTimer;
+function debounceSearch(){clearTimeout(searchTimer);searchTimer=setTimeout(searchLib,300)}
+let libRows=[], libSort={key:'plays',dir:-1};
+async function searchLib(){
+  libRows=await api('/api/tracks?q='+encodeURIComponent($('searchBox').value)+'&limit=5000');
+  const sel=$('libGenre'),cur=sel.value;
+  const genres=[...new Set(libRows.map(t=>t.genre).filter(Boolean))].sort();
+  sel.innerHTML='<option value="">All genres</option>'+genres.map(g=>`<option${g===cur?' selected':''}>${esc(g)}</option>`).join('');
+  renderLib();
+}
+function renderLib(){
+  const g=$('libGenre').value, an=$('libAnalyzed').value;
+  let rows=libRows.filter(t=>(!g||t.genre===g)&&(an===''||(an==='1'?t.bpm!=null:t.bpm==null)));
+  const {key,dir}=libSort;
+  rows=rows.slice().sort((a,b)=>{let x=a[key],y=b[key];
+    if(x==null&&y==null)return 0; if(x==null)return 1; if(y==null)return -1;
+    return typeof x==='string'?dir*x.localeCompare(y):dir*(x-y)});
+  $('libCount').textContent=rows.length.toLocaleString()+' tracks';
+  $('libTable').querySelector('tbody').innerHTML=rows.map(t=>`<tr style="cursor:pointer" onclick="showDetail(${t.id})">
+    <td style="font-weight:600">${esc(t.title)}</td><td>${esc(t.artist)}</td><td>${t.genre?`<span class="tag">${esc(t.genre)}</span>`:''}</td>
+    <td>${t.plays}</td><td>${t.bpm??''}</td><td>${t.camelot?`<span class="tag">${t.camelot}</span>`:(t.key?t.key+' '+(t.mode||''):'')}</td>
+    <td>${fbar(t.energy)}</td><td>${fbar(t.valence)}</td></tr>`).join('')||'<tr><td colspan="8" class="sub" style="padding:20px;text-align:center">No tracks match these filters.</td></tr>';
+  document.querySelectorAll('#libTable th.sortable').forEach(th=>{
+    const on=th.dataset.key===libSort.key;
+    th.classList.toggle('sorted',on);
+    const base=th.dataset.label||(th.dataset.label=th.textContent.replace(/\s*[▲▼]\s*$/,'').trim());
+    th.innerHTML=base+(on?` <span class="caret">${libSort.dir<0?'▼':'▲'}</span>`:'');
+  });
+}
+document.querySelectorAll('#libTable th.sortable').forEach(th=>th.addEventListener('click',()=>{
+  const k=th.dataset.key;
+  if(libSort.key===k)libSort.dir*=-1; else libSort={key:k,dir:th.dataset.type==='n'?-1:1};
+  renderLib();
+}));
+async function dedupe(){
+  const b=$('dedupeBtn'),m=$('dedupeMsg');
+  b.disabled=true;m.className='msg';m.innerHTML='<span class="spin"></span> Scanning for the same song stored under different titles…';
+  let p;try{p=await api('/api/dedupe/preview')}catch(e){m.className='msg err';m.textContent=e.message;b.disabled=false;return}
+  if(!p.clusters){m.className='msg';m.textContent='✓ No duplicates found — play counts are already consolidated.';b.disabled=false;return}
+  const eg=p.examples.slice(0,4).map(c=>`• ${c.canonical.title} — ${c.canonical.artist}  (${c.total_plays} plays across ${c.members.length} rows)`).join('\n');
+  const go=confirm(`Found ${p.clusters} songs split across ${p.rows_removed} duplicate rows (${p.plays_affected} plays total).\nThese will be combined so each song shows its true play count.\n\n${eg}\n\n${p.skipped} uncertain groups will be left untouched. Proceed?`);
+  if(!go){m.textContent='';b.disabled=false;return}
+  m.innerHTML='<span class="spin"></span> Merging duplicates…';
+  try{const r=await api('/api/dedupe/apply',{method:'POST'});
+    m.className='msg';m.textContent=`✓ Merged ${r.clusters_merged} songs · removed ${r.rows_removed} duplicate rows · consolidated ${r.plays_consolidated} plays.`;
+    await searchLib();refreshAll();
+  }catch(e){m.className='msg err';m.textContent=e.message}
+  b.disabled=false;
+}
+
+function camelotWheel(code){
+  const R=95,cx=110,cy=110;
+  let svg=`<svg viewBox="0 0 220 220" width="200" height="200">`;
+  for(let n=0;n<12;n++){
+    const a0=(n/12)*2*Math.PI-Math.PI/2-Math.PI/12,a1=a0+2*Math.PI/12;
+    [['B',R,R-24],['A',R-24,R-48]].forEach(([letter,ro,ri])=>{
+      const cc=n+1+letter,active=cc===code;
+      const p=(ang,r)=>`${cx+r*Math.cos(ang)},${cy+r*Math.sin(ang)}`;
+      svg+=`<path d="M${p(a0,ri)} L${p(a0,ro)} A${ro},${ro} 0 0 1 ${p(a1,ro)} L${p(a1,ri)} A${ri},${ri} 0 0 0 ${p(a0,ri)} Z"
+        fill="${active?'#a855f7':'rgba(255,255,255,.04)'}" stroke="rgba(255,255,255,.1)" stroke-width="1"/>`;
+      const mid=(a0+a1)/2,mr=(ro+ri)/2;
+      svg+=`<text x="${cx+mr*Math.cos(mid)}" y="${cy+mr*Math.sin(mid)}" font-size="8"
+        fill="${active?'#0a1225':'#a99fbb'}" text-anchor="middle" dominant-baseline="middle">${cc}</text>`;
+    });
+  }
+  return svg+`<text x="${cx}" y="${cy}" font-size="12" font-weight="700" fill="#a855f7" text-anchor="middle" dominant-baseline="middle">${code||'?'}</text></svg>`;
+}
+const VBTN=['spectrogram','chroma','waveform','tempogram','selfsim'];
+function showVisual(id,kind){$('visualImg').src=`/api/track/${id}/visual?kind=${kind}`;
+  document.querySelectorAll('#visualBtns button').forEach(b=>b.classList.toggle('active',b.dataset.k===kind))}
+
+async function showDetail(id){
+  const t=await api('/api/track/'+id);
+  const f=t.features;
+  const scores=['energy','danceability','valence','acousticness','brightness','instrumentalness','speechiness','liveness'];
+  $('detailInner').innerHTML=`<h2>${esc(t.title)}</h2>
+    <div class="sub" style="margin-bottom:14px">${esc(t.artist)} ${t.album?'· '+esc(t.album):''} ${t.release_date?'· '+t.release_date:''} ${t.genre?'· '+esc(t.genre):''} · ${t.play_count} plays</div>
+    ${t.preview_url?`<audio controls src="${t.preview_url}"></audio>`:'<span class="sub">no preview available</span>'}
+    ${f&&!f.error?`<div style="display:flex;gap:20px;flex-wrap:wrap;margin-top:16px">
+      <div style="flex:1;min-width:280px">
+        <div class="featrow"><b style="width:130px">BPM</b><span>${f.bpm} <span class="sub">(conf ${pct(f.tempo_confidence)})</span></span></div>
+        <div class="featrow"><b style="width:130px">Key / Camelot</b><span>${f.key} ${f.mode} · <b style="color:var(--accent)">${f.camelot||'?'}</b> <span class="sub">(conf ${pct(f.key_confidence)})</span></span></div>
+        <div class="featrow"><b style="width:130px">Time signature</b><span>${f.time_signature||'?'}/4 · ${f.onset_rate} onsets/s</span></div>
+        <div class="featrow"><b style="width:130px">Loudness</b><span>${f.loudness_db} dB · ${f.dynamic_range} dB range</span></div>
+        <div class="featrow"><b style="width:130px">Beat regularity</b><span>${pct(f.beat_regularity)} · harmonic ${pct(f.harmonic_ratio)}</span></div>
+      </div>
+      <div style="text-align:center">${camelotWheel(f.camelot)}<div class="sub">harmonic-mix key</div></div>
+    </div>
+    <div style="margin-top:10px">
+      ${scores.map(k=>f[k]!=null?`<div class="featrow"><b style="width:130px;text-transform:capitalize">${k}</b><div class="bar"><i style="width:${Math.round(f[k]*100)}%"></i></div><span style="width:44px;text-align:right">${f[k]}</span></div>`:'').join('')}
+      <div class="sub" style="margin-top:8px">Spectrum: centroid ${f.spectral_centroid}Hz · bandwidth ${f.spectral_bandwidth}Hz · contrast ${f.spectral_contrast} · flatness ${f.spectral_flatness}</div>
+      <div class="sub">Timbre (MFCC): ${(f.mfcc||[]).join(', ')}</div>
+    </div>
+    <div style="margin-top:16px">
+      <div id="visualBtns" style="display:flex;gap:6px;margin-bottom:8px">${VBTN.map(k=>`<button class="ghost" data-k="${k}" onclick="showVisual(${id},'${k}')" style="text-transform:capitalize">${k}</button>`).join('')}</div>
+      <img id="visualImg" style="width:100%;border-radius:10px;background:var(--panel)" src="/api/track/${id}/visual?kind=spectrogram">
+    </div>
+    <div id="lyricDetail" style="margin-top:16px">${t.lyrics?`<h3 style="font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.09em">Lyrics</h3>
+      <div class="sub" style="margin:4px 0">sentiment ${t.lyrics.sentiment>0?'+':''}${t.lyrics.sentiment} · ${t.lyrics.word_count} words · ${Math.round(t.lyrics.unique_ratio*100)}% unique${t.lyrics.explicit?' · <span style="color:var(--warn)">explicit</span>':''}</div>
+      <div>${(t.lyrics.top_words||[]).map(w=>`<span class="tag">${esc(w.word)} ×${w.n}</span>`).join('')}</div>`:''}</div>
+    <div id="dossier" style="margin-top:16px"><span class="spin"></span> <span class="sub">Building research dossier…</span></div>
+    <div id="moreLikeThis" style="margin-top:16px"></div>
+    `:'<p class="sub" style="margin-top:14px">Not signal-analyzed yet — run the pipeline in Sources.</p>'}`;
+  if(f&&!f.error){
+    document.querySelector('#visualBtns button').classList.add('active');
+    loadDossier(id);
+    loadSimilar(id);
+  }
+  $('detail').style.display='flex';
+}
+async function loadSimilar(id){
+  let r;try{r=await api('/api/track/'+id+'/similar')}catch(e){return}
+  const el=$('moreLikeThis');if(!el)return;
+  if(!r.available||!r.similar||!r.similar.length){el.innerHTML='';return}
+  el.innerHTML=`<h3 style="font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.09em">More like this <span style="text-transform:none">(debiased · diversity-ranked)</span></h3>
+    ${r.similar.map(s=>`<div class="featrow" style="cursor:pointer" onclick="showDetail(${s.id})"><span>▸ ${esc(s.title)} — ${esc(s.artist)}</span><span class="tag">${Math.round(s.similarity*100)}%</span></div>`).join('')}`;
+}
+
+async function loadDossier(id){
+  let d;try{d=await api('/api/track/'+id+'/dossier')}catch(e){$('dossier').innerHTML='';return}
+  const el=$('dossier');if(!el)return;
+  if(!d.available){el.innerHTML='';return}
+  const P=d.percentiles||{};
+  const pbar=(k,label)=>P[k]==null?'':`<div class="featrow"><span class="sub" style="width:120px;text-transform:capitalize">${label||k}</span>
+    <div class="bar"><i style="width:${P[k]}%"></i></div><span style="width:110px;text-align:right" class="sub">${P[k]>=50?'higher':'lower'} than ${P[k]>=50?Math.round(P[k]):Math.round(100-P[k])}%</span></div>`;
+  const st=d.structure&&!d.structure.error?d.structure:null;
+  let structureHtml='';
+  if(st&&st.segments&&st.segments.length){
+    const W=100/st.duration;
+    structureHtml=`<h3 style="font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.09em;margin-top:16px">Structure (from the preview) · repetition ${Math.round((st.repetition_score||0)*100)}%</h3>
+      <div style="display:flex;height:34px;border-radius:8px;overflow:hidden;margin-top:8px;border:1px solid var(--border)">
+        ${st.segments.map((s,i)=>{const isCh=st.chorus&&s.start===st.chorus[0];
+          return `<div title="${s.start}s–${s.end}s · energy ${s.energy} · recurrence ${s.recurrence}"
+            style="width:${(s.end-s.start)*W}%;background:${isCh?'var(--g1)':`rgba(129,140,248,${0.15+0.55*s.energy})`};
+            ${isCh?'':''}display:grid;place-items:center;font-size:9px;color:${isCh?'#0a1225':'var(--muted)'};font-weight:${isCh?800:400}">${isCh?'HOOK':'S'+(i+1)}</div>`}).join('')}
+      </div>
+      <div style="display:flex;align-items:flex-end;gap:1px;height:36px;margin-top:6px">
+        ${st.energy_curve.map(v=>`<div style="flex:1;height:${Math.max(4,v*100)}%;background:rgba(168,85,247,.5);border-radius:1px"></div>`).join('')}
+      </div><div class="sub" style="font-size:10px">energy over time →</div>`;
+  }
+  el.innerHTML=`
+    <h3 style="font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.09em">vs your library (${d.library_size} analyzed tracks)</h3>
+    <div style="margin-top:6px">${pbar('bpm','tempo')}${pbar('energy')}${pbar('valence')}${pbar('danceability')}${pbar('loudness_db','loudness')}${pbar('dynamic_range','dynamics')}</div>
+    ${structureHtml}
+    ${d.similar&&d.similar.length?`<h3 style="font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.09em;margin-top:16px">Closest sonic siblings in your library</h3>
+      ${d.similar.map(s=>`<div class="featrow" style="cursor:pointer" onclick="showDetail(${s.id})"><span>▸ ${esc(s.title)} — ${esc(s.artist)}</span><span class="tag">${Math.round(s.similarity*100)}% similar</span></div>`).join('')}`:''}`;
+}
+
+const postJson=(p,body)=>api(p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+async function spotifyCookie(){const v=$('spDc').value.trim();const m=$('spotifyMsg');
+  if(!v){m.className='msg err';m.textContent='Paste the sp_dc cookie value first';return}
+  const b=$('spCookieBtn');b.disabled=true;m.className='msg';m.innerHTML='<span class="spin"></span> Validating cookie…';
+  try{await postJson('/api/spotify/cookie',{sp_dc:v});m.textContent='✓ Connected. Now click Sync now.';refreshAll()}
+  catch(e){m.className='msg err';m.textContent=e.message}b.disabled=false}
+async function spotifyBearer(){const v=$('spBearer').value.trim();const m=$('spotifyMsg');
+  if(!v){m.className='msg err';m.textContent='Paste a Bearer token first';return}m.className='msg';m.textContent='Saving token…';
+  try{await postJson('/api/spotify/bearer',{token:v});m.textContent='✓ Token saved. Click Sync now (~1h).';refreshAll()}
+  catch(e){m.className='msg err';m.textContent=e.message}}
+async function spotifySync(){const b=$('syncBtn');b.disabled=true;$('spotifyMsg').className='msg';$('spotifyMsg').innerHTML='<span class="spin"></span> Syncing…';
+  try{const r=await api('/api/spotify/sync',{method:'POST'});
+    $('spotifyMsg').textContent=`✓ ${r.plays} plays, ${r.saved} saved, ${r.top_tracks} top tracks, ${r.top_artists} top artists`;refreshAll()}
+  catch(e){$('spotifyMsg').className='msg err';$('spotifyMsg').textContent=e.message}b.disabled=false}
+// Official YouTube Data API v3 sign-in (liked music, playlists, subscriptions).
+async function ytDataSync(){
+  const b=$('ytDataSyncBtn');b.disabled=true;$('ytMsg').className='msg';
+  $('ytMsg').innerHTML='<span class="spin"></span> Pulling liked music, playlists &amp; subscriptions…';
+  try{const r=await api('/api/youtube/sync',{method:'POST'});
+    $('ytMsg').textContent=`✓ ${r.liked} liked songs · ${r.playlists} playlists (${r.playlist_tracks} tracks) · ${r.subscriptions} artists · filtered ${r.skipped_shorts||0} shorts + ${r.skipped_nonmusic||0} non-music`;refreshAll()}
+  catch(e){$('ytMsg').className='msg err';$('ytMsg').textContent=e.message}b.disabled=false}
+// NOTE: YouTube OAuth device flow removed — Google rejects TV-client OAuth
+// tokens on the YT Music internal API. Header method adds listening history.
+async function ytAuth(){const v=$('ytHeaders').value.trim();const m=$('ytMsg');
+  if(!v){m.className='msg err';m.textContent='Paste your request headers first';return}
+  const b=$('ytAuthBtn');b.disabled=true;m.className='msg';m.innerHTML='<span class="spin"></span> Reading headers…';
+  try{await postJson('/api/ytmusic/auth',{headers_raw:v});m.textContent='✓ Connected. Now click Sync now.';refreshAll()}
+  catch(e){m.className='msg err';m.textContent=e.message}b.disabled=false}
+async function ytSync(){const b=$('ytSyncBtn');b.disabled=true;$('ytMsg').className='msg';$('ytMsg').innerHTML='<span class="spin"></span> Pulling YouTube Music…';
+  try{const r=await api('/api/ytmusic/sync',{method:'POST'});
+    $('ytMsg').textContent=`✓ ${r.history} music plays (${r.music_videos} videos) · ${r.skipped_nonmusic} non-music skipped · ${r.liked} liked · ${r.library} library`;refreshAll()}
+  catch(e){$('ytMsg').className='msg err';$('ytMsg').textContent=e.message}b.disabled=false}
+async function importFile(kind,inputId,msgId){const f=$(inputId).files[0];const m=$(msgId);
+  if(!f){m.className='msg err';m.textContent='Choose a file first';return}m.className='msg';m.innerHTML='<span class="spin"></span> Importing…';
+  const fd=new FormData();fd.append('file',f);
+  try{const r=await api('/api/import/'+kind,{method:'POST',body:fd});m.textContent=`✓ Imported ${r.imported} plays (${r.skipped} skipped)`;refreshAll()}
+  catch(e){m.className='msg err';m.textContent=e.message}}
+async function importMulti(kind,inputId,msgId){const files=[...$(inputId).files];const m=$(msgId);
+  if(!files.length){m.className='msg err';m.textContent='Choose one or more files first';return}
+  m.className='msg';let imp=0,skp=0,i=0;
+  for(const f of files){i++;m.innerHTML=`<span class="spin"></span> Importing file ${i}/${files.length}…`;
+    const fd=new FormData();fd.append('file',f);
+    try{const r=await api('/api/import/'+kind,{method:'POST',body:fd});imp+=r.imported;skp+=r.skipped}
+    catch(e){m.className='msg err';m.textContent=`File ${i}: ${e.message}`;return}}
+  m.className='msg';m.textContent=`✓ Imported ${imp} plays from ${files.length} file(s) (${skp} skipped)`;refreshAll()}
+
+async function enrich(){const b=$('enrichBtn');b.disabled=true;$('procMsg').className='msg';$('procMsg').innerHTML='<span class="spin"></span> Matching against Deezer…';
+  try{const r=await api('/api/enrich?limit=40',{method:'POST'});$('procMsg').textContent=`✓ Matched ${r.matched}, failed ${r.failed} — ${r.remaining} left`;return r}
+  catch(e){$('procMsg').className='msg err';$('procMsg').textContent=e.message}finally{b.disabled=false}}
+async function analyze(retry){const b=$('analyzeBtn');b.disabled=true;$('procMsg').className='msg';$('procMsg').innerHTML='<span class="spin"></span> '+(retry?'Retrying failed…':'Signal analysis (librosa)…');
+  try{const r=await api('/api/analyze?limit=8&retry_errors='+(retry?'true':'false'),{method:'POST'});$('procMsg').textContent=`✓ Analyzed ${r.analyzed}, errors ${r.errors} — ${r.remaining} left`;refreshAll();return r}
+  catch(e){$('procMsg').className='msg err';$('procMsg').textContent=e.message}finally{b.disabled=false}}
+async function fetchLyrics(){const b=$('lyricsBtn');b.disabled=true;$('procMsg').className='msg';$('procMsg').innerHTML='<span class="spin"></span> Fetching lyrics…';
+  try{const r=await api('/api/lyrics/fetch?limit=10',{method:'POST'});$('procMsg').textContent=`✓ Lyrics for ${r.analyzed}, ${r.missing} not found — ${r.remaining} left`;loadLyrics()}
+  catch(e){$('procMsg').className='msg err';$('procMsg').textContent=e.message}finally{b.disabled=false}}
+let auto=false;
+async function toggleAuto(){auto=!auto;$('autoBtn').textContent=auto?'⏸ Stop auto':'▶ Auto-process all';
+  while(auto){const e=await enrich();if(e&&e.remaining===0){const a=await analyze();if(a&&a.remaining===0)break}}
+  auto=false;$('autoBtn').textContent='▶ Auto-process all'}
+async function clearData(){if(!confirm('Delete ALL tracks, plays, features, playlists and lyrics? This cannot be undone.'))return;
+  await api('/api/data/clear',{method:'POST'});$('procMsg').textContent='✓ All data cleared.';refreshAll()}
+
+async function genRecs(){const b=$('genRecsBtn');b.disabled=true;$('recsMsg').className='msg';$('recsMsg').innerHTML='<span class="spin"></span> Walking artist graphs + analyzing candidates… (~1-2 min)';
+  try{await api('/api/recommendations/generate',{method:'POST'});$('recsMsg').textContent='✓ Done';loadRecs()}
+  catch(e){$('recsMsg').className='msg err';$('recsMsg').textContent=e.message}b.disabled=false}
+async function loadRecs(){const rows=await api('/api/recommendations');
+  $('recsGrid').innerHTML=rows.length?rows.map((r,i)=>`<div class="card"><div style="display:flex;justify-content:space-between">
+    <div><div style="font-weight:700">${esc(r.title)}</div><div class="sub">${esc(r.artist)}</div></div>
+    <div class="tag" style="height:fit-content">${r.score??''}</div></div>
+    <div class="sub" style="margin:8px 0">${esc(r.reason||'')}</div>
+    ${r.preview_url?`<audio controls preload="none" src="${r.preview_url}"></audio>`:''}</div>`).join(''):'<p class="sub">No recommendations yet — click Generate.</p>';
+}
+
+/* ---------- Discover (deepcut upgrades) ---------- */
+function trackCard(t,metric){
+  return `<div class="card"><div style="display:flex;justify-content:space-between;gap:8px">
+    <div style="cursor:pointer" onclick="showDetail(${t.id})"><div style="font-weight:700">${esc(t.title)}</div><div class="sub">${esc(t.artist)}${t.genre?' · '+esc(t.genre):''}</div></div>
+    <div class="tag" style="height:fit-content">${metric}</div></div>
+    ${t.preview_url?`<audio controls preload="none" src="${t.preview_url}"></audio>`:''}</div>`;
+}
+async function loadDiscover(){
+  api('/api/space/diagnostics').then(d=>{
+    $('debiasBox').innerHTML=d.available?
+      `<div style="display:flex;gap:26px;flex-wrap:wrap"><div><div class="big">${Math.round(d.popularity_r2_before*100)}%</div><div class="sub">popularity leakage (before)</div></div>
+       <div><div class="big gtext">${Math.round(d.popularity_r2_after*100)}%</div><div class="sub">after debiasing</div></div></div>
+       <p class="sub" style="margin-top:8px">${d.verdict}</p>`
+      :'<p class="sub">Need more analyzed tracks.</p>';
+  });
+  api('/api/embed/status').then(s=>{
+    $('semStatus').innerHTML = s.available
+      ? (s.embedded>0? `✓ ${s.embedded} previews embedded — search away.`
+         : `⚠ Model ready but nothing embedded yet. <button class="ghost" onclick="embedPreviews()">Embed ${Math.min(s.with_preview,2691)} previews</button>`)
+      : `<span style="color:var(--warn)">Semantic search is off.</span> ${s.note} — then reload. <span class="sub">(GPU recommended; ${s.with_preview} previews ready.)</span>`;
+  });
+}
+async function semSearch(){
+  const q=$('semQ').value.trim();if(!q)return;
+  $('semResults').innerHTML='<span class="spin"></span>';
+  const r=await api('/api/search/semantic?k=18&q='+encodeURIComponent(q));
+  if(r.error){$('semResults').innerHTML=`<p class="sub" style="color:var(--warn)">${r.error}</p>`;return}
+  $('semResults').innerHTML=(r.results||[]).map(t=>trackCard(t,Math.round(t.match*100)+'%')).join('')||'<p class="sub">No matches.</p>';
+}
+async function embedPreviews(){
+  $('semStatus').innerHTML='<span class="spin"></span> Embedding previews (this runs the CLAP model)…';
+  try{let done=0;while(true){const r=await api('/api/embed?limit=50',{method:'POST'});if(r.error){$('semStatus').textContent=r.error;return}done+=r.embedded;$('semStatus').innerHTML=`<span class="spin"></span> Embedded ${done}… (${r.remaining} left)`;if(r.remaining===0||r.embedded===0)break}
+    $('semStatus').textContent=`✓ Embedded ${done}. Semantic search is live.`;}
+  catch(e){$('semStatus').textContent=e.message}
+}
+async function fitTaste(){
+  const b=$('tasteBtn');b.disabled=true;$('tasteMsg').className='msg';$('tasteMsg').innerHTML='<span class="spin"></span> Training on your play history…';
+  let r;try{r=await api('/api/taste/fit',{method:'POST'})}catch(e){$('tasteMsg').className='msg err';$('tasteMsg').textContent=e.message;b.disabled=false;return}
+  b.disabled=false;
+  if(!r.available){$('tasteMsg').className='msg err';$('tasteMsg').textContent=r.note;return}
+  $('tasteMsg').textContent=`✓ Fit on ${r.n_tracks} tracks · held-out AUC ${r.auc??'–'} · space: ${r.space}`;
+  $('tasteDrivers').innerHTML = r.drivers.length? '<div class="sub" style="margin-bottom:4px">What drives your taste:</div>'+r.drivers.slice(0,8).map(d=>`<span class="tag" style="color:${d.weight>0?'var(--accent)':'var(--accent4)'}">${d.weight>0?'▲':'▼'} ${esc(d.feature)}</span>`).join('') : '<span class="sub">(driver names available on the DSP feature space; embeddings are not human-labeled)</span>';
+  $('tasteTop').innerHTML=r.top.map(t=>trackCard(t,'❤ '+Math.round(t.taste*100)+'%')).join('');
+  $('tasteGems').innerHTML=r.gems.length?r.gems.map(t=>trackCard(t,Math.round(t.taste*100)+'%')).join(''):'<p class="sub">No hidden gems found (you\'ve played your favourites).</p>';
+}
+
+async function loadLyrics(){let o;try{o=await api('/api/lyrics/overview')}catch(e){return}
+  if(!o.available){$('lyricsBody').innerHTML='<p class="sub">No lyrics analyzed yet — run “Fetch lyrics” in Sources.</p>';return}
+  const max=Math.max(...o.word_cloud.map(w=>w.weight),1);
+  $('lyricsBody').innerHTML=`<div style="display:flex;gap:30px;flex-wrap:wrap;margin-bottom:14px">
+      <div><div class="big gtext">${o.n_tracks}</div><div class="sub">tracks with lyrics</div></div>
+      <div><div class="big">${o.avg_sentiment>0?'+':''}${o.avg_sentiment}</div><div class="sub">avg sentiment</div></div>
+      <div><div class="big">${o.explicit_pct}%</div><div class="sub">explicit</div></div>
+      <div><div class="big">${Math.round(o.avg_vocab_richness*100)}%</div><div class="sub">vocab richness</div></div></div>
+    <div style="line-height:2.4">${o.word_cloud.map(w=>`<span style="font-size:${12+24*w.weight/max}px;color:${w.weight/max>.5?'#a855f7':'#a99fbb'};margin-right:11px;font-weight:${w.weight/max>.5?700:400}">${esc(w.word)}</span>`).join('')}</div>
+    ${o.mismatches.length?`<h3 style="margin-top:18px">Audio ↔ lyric mood mismatches</h3>${o.mismatches.map(m=>`<div class="featrow"><span>${esc(m.title)} — ${esc(m.artist)}</span><span class="tag">${m.kind}</span></div>`).join('')}`:''}`;
+}
+
+/* ---------- Deep Research ---------- */
+async function runResearch(){
+  const b=$('researchBtn');b.disabled=true;$('researchMsg').className='msg';
+  $('researchMsg').innerHTML='<span class="spin"></span> Running library-wide statistical study…';
+  let r;try{r=await api('/api/research/deep')}
+  catch(e){$('researchMsg').className='msg err';$('researchMsg').textContent=e.message;b.disabled=false;return}
+  b.disabled=false;
+  if(!r.available){$('researchMsg').className='msg err';$('researchMsg').textContent=r.note;return}
+  $('researchMsg').textContent=`✓ Studied ${r.n_tracks} analyzed tracks`;
+  const gcolor={},gi=[0];
+  const gc=g=>{if(!g)return '#726984';if(!gcolor[g])gcolor[g]=PAL[gi[0]++%PAL.length];return gcolor[g]};
+  $('researchOut').innerHTML=`
+    <div class="section card"><h3>Findings</h3>
+      ${r.findings.map((f,i)=>`<p style="margin:9px 0;font-size:13.5px;display:flex;gap:10px"><span style="color:var(--accent);font-weight:800">${String(i+1).padStart(2,'0')}</span><span>${esc(f)}</span></p>`).join('')}</div>
+    <div class="section card">
+      <h3>Library map — PCA of your sonic space (${r.pca_map.var_explained[0]}% + ${r.pca_map.var_explained[1]}% variance)</h3>
+      <p class="sub" style="margin-bottom:8px">X: ${esc(r.pca_map.x_label)} · Y: ${esc(r.pca_map.y_label)} · colour = genre · size = plays · click a dot to open the track</p>
+      <canvas id="pcaMap" style="max-height:430px"></canvas></div>
+    <div class="grid cols2 section">
+      <div class="card"><h3>Similarity network — nearest sonic neighbours</h3>
+        <p class="sub" style="margin-bottom:8px">Each track linked to its 2 closest-sounding siblings (timbre + features). Click a node to open it.</p>
+        <canvas id="netCanvas" width="560" height="430" style="width:100%;border-radius:10px;background:rgba(255,255,255,.02)"></canvas></div>
+      <div class="card"><h3>Era drift</h3>
+        <table><thead><tr><th>Era</th><th>Tracks</th><th>Energy</th><th>Valence</th><th>Loudness</th></tr></thead>
+        <tbody>${r.era_drift.map(e=>`<tr><td>${e.era}</td><td>${e.n}</td><td>${fbar(e.energy)}</td><td>${fbar(e.valence)}</td><td>${e.loudness} dB</td></tr>`).join('')}</tbody></table>
+        <h3 style="margin-top:18px">Feature statistics</h3>
+        <table><thead><tr><th></th><th>min</th><th>q25</th><th>med</th><th>q75</th><th>max</th></tr></thead>
+        <tbody>${Object.entries(r.stats).map(([k,s])=>`<tr><td style="text-transform:capitalize">${k}</td><td>${s.min}</td><td>${s.q25}</td><td><b>${s.median}</b></td><td>${s.q75}</td><td>${s.max}</td></tr>`).join('')}</tbody></table></div>
+    </div>
+    <div class="section"><h3 style="font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.09em;font-weight:700;margin-bottom:12px">Artist sonic signatures</h3>
+      <div class="grid cols3">${r.signatures.map(s=>`<div class="card">
+        <div style="font-weight:700">${esc(s.artist)}</div>
+        <div class="sub" style="margin-bottom:8px">${s.n_tracks} track${s.n_tracks>1?'s':''} · ${s.plays} plays</div>
+        <div style="font-size:12.5px;margin-bottom:8px">Distinctly <b style="color:${s.direction==='higher'?'var(--accent)':'var(--accent4)'}">${s.direction} ${s.distinctive}</b> <span class="sub">(z=${s.distinctive_z})</span></div>
+        ${Object.entries(s.profile).slice(0,4).map(([k,v])=>`<div class="featrow" style="margin:3px 0"><span class="sub" style="width:100px;text-transform:capitalize">${k}</span><div class="bar"><i style="width:${Math.round(v*100)}%"></i></div></div>`).join('')}
+      </div>`).join('')}</div></div>`;
+  const pts=r.pca_map.points.map(p=>({x:p.x,y:p.y,r:4+Math.min(16,Math.sqrt(p.plays||1)*1.8),p}));
+  mkChart('pcaMap',{type:'bubble',data:{datasets:[{data:pts,backgroundColor:pts.map(x=>gc(x.p.genre)+'cc'),borderColor:'#0a0b0d',borderWidth:1}]},
+    options:{onClick:(e,el)=>{if(el.length)showDetail(pts[el[0].index].p.id)},
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>{const p=pts[c.dataIndex].p;return `${p.title} — ${p.artist} (${p.genre||'?'})`}}}},
+      scales:{x:{grid:{color:'rgba(255,255,255,.05)'}},y:{grid:{color:'rgba(255,255,255,.05)'}}}}});
+  drawNetwork(r.network,gc);
+}
+function drawNetwork(net,gc){
+  const cv=$('netCanvas'),ctx=cv.getContext('2d'),W=cv.width,H=cv.height;
+  const N=net.nodes.length;if(!N)return;
+  const pos={},vel={};
+  net.nodes.forEach((n,i)=>{const a=2*Math.PI*i/N;pos[n.id]=[W/2+150*Math.cos(a),H/2+150*Math.sin(a)];vel[n.id]=[0,0]});
+  const edges=net.edges;
+  for(let it=0;it<160;it++){
+    net.nodes.forEach(n=>{let fx=0,fy=0;const[x,y]=pos[n.id];
+      net.nodes.forEach(m=>{if(m.id===n.id)return;const[mx,my]=pos[m.id];const dx=x-mx,dy=y-my;const d2=dx*dx+dy*dy+0.01;const f=1800/d2;fx+=dx*f;fy+=dy*f});
+      fx+=(W/2-x)*0.012;fy+=(H/2-y)*0.012;vel[n.id]=[fx,fy]});
+    edges.forEach(e=>{const[ax,ay]=pos[e.a],[bx,by]=pos[e.b];const dx=bx-ax,dy=by-ay;const d=Math.sqrt(dx*dx+dy*dy)+.01;const f=(d-70)*0.02;
+      vel[e.a][0]+=dx/d*f;vel[e.a][1]+=dy/d*f;vel[e.b][0]-=dx/d*f;vel[e.b][1]-=dy/d*f});
+    net.nodes.forEach(n=>{pos[n.id][0]=Math.max(14,Math.min(W-14,pos[n.id][0]+Math.max(-6,Math.min(6,vel[n.id][0]))));
+      pos[n.id][1]=Math.max(14,Math.min(H-14,pos[n.id][1]+Math.max(-6,Math.min(6,vel[n.id][1]))))});
+  }
+  ctx.clearRect(0,0,W,H);
+  ctx.strokeStyle='rgba(139,149,167,.25)';
+  edges.forEach(e=>{const[ax,ay]=pos[e.a],[bx,by]=pos[e.b];ctx.beginPath();ctx.moveTo(ax,ay);ctx.lineTo(bx,by);ctx.stroke()});
+  net.nodes.forEach(n=>{const[x,y]=pos[n.id];const r=3+Math.min(9,Math.sqrt(n.plays||1)*1.1);
+    ctx.beginPath();ctx.arc(x,y,r,0,7);ctx.fillStyle=gc(n.genre);ctx.fill();ctx.strokeStyle='#0a0b0d';ctx.stroke()});
+  cv.onclick=ev=>{const rect=cv.getBoundingClientRect();const x=(ev.clientX-rect.left)*W/rect.width,y=(ev.clientY-rect.top)*H/rect.height;
+    let best=null,bd=1e9;net.nodes.forEach(n=>{const[nx,ny]=pos[n.id];const d=(nx-x)**2+(ny-y)**2;if(d<bd){bd=d;best=n}});
+    if(best&&bd<400)showDetail(best.id)};
+}
+
+async function loadTrends(){
+  const [mood,disc,conc,cal]=await Promise.all([api('/api/stats/mood-over-time'),api('/api/stats/discovery'),api('/api/stats/concentration'),api('/api/stats/calendar')]);
+  $('trendCards').innerHTML=[
+    ['🧭','Discovery ratio',disc.discovery_ratio!=null?Math.round(disc.discovery_ratio*100)+'%':'–',disc.explorer_label||''],
+    ['🎯','Artist concentration',conc.available?conc.gini:'–',conc.available?conc.label:''],
+    ['🏆','Top-5 share',conc.available?conc.top5_pct+'%':'–','of all plays'],
+    ['📅','Active days',cal.active_days,'with listening'],
+  ].map(([ic,t,v,s])=>`<div class="stat"><span class="ic">${ic}</span><div class="big">${v}</div><div class="sub">${t}</div><div class="sub" style="font-size:11px">${s}</div></div>`).join('');
+  mkChart('moodChart',{type:'line',data:{labels:mood.map(m=>m.month),datasets:[
+    {label:'valence',data:mood.map(m=>m.valence),borderColor:'#e0a458',backgroundColor:c=>gfill(c.chart.ctx,'rgba(224,164,88,.25)','rgba(224,164,88,0)'),fill:true,tension:.4,pointRadius:2},
+    {label:'energy',data:mood.map(m=>m.energy),borderColor:'#e0607e',tension:.4,pointRadius:2}]},options:{scales:{y:{min:0,max:1}}}});
+  mkChart('discoveryChart',{type:'bar',data:{labels:disc.series.map(s=>s.month),datasets:[
+    {label:'new artists',data:disc.series.map(s=>s.new_artists),backgroundColor:'#a855f7',borderRadius:5},
+    {label:'new tracks',data:disc.series.map(s=>s.new_tracks),backgroundColor:'#818cf8',borderRadius:5}]}});
+  renderCalendar(cal);loadClusters();
+}
+function renderCalendar(cal){
+  const map=Object.fromEntries(cal.days.map(d=>[d.day,d.plays])),max=cal.max_in_day||1;
+  if(!cal.days.length){$('calendar').innerHTML='<p class="sub">No dated plays yet.</p>';return}
+  const start=new Date(cal.days[0].day),end=new Date(cal.days[cal.days.length-1].day);
+  start.setDate(start.getDate()-start.getDay());
+  let html='<div style="display:flex;gap:3px">',col='';
+  for(let d=new Date(start);d<=end;d.setDate(d.getDate()+1)){
+    const iso=d.toISOString().slice(0,10),v=map[iso]||0,a=v/max;
+    col+=`<div title="${iso}: ${v} plays" style="width:13px;height:13px;border-radius:3px;background:${v?`rgba(168,85,247,${(0.16+0.84*a).toFixed(2)})`:'rgba(255,255,255,.04)'}"></div>`;
+    if(d.getDay()===6){html+=`<div style="display:flex;flex-direction:column;gap:3px">${col}</div>`;col=''}}
+  if(col)html+=`<div style="display:flex;flex-direction:column;gap:3px">${col}</div>`;
+  $('calendar').innerHTML=html+'</div>';
+}
+async function loadClusters(){const k=$('kSelect').value;const c=await api('/api/stats/clusters?k='+k);
+  if(!c.available){$('clusters').innerHTML=`<p class="sub">${c.note||'Not enough analyzed tracks.'}</p>`;return}
+  $('clusters').innerHTML=c.clusters.map(cl=>`<div class="card">
+    <h3 style="color:var(--text);font-size:14px;text-transform:none;letter-spacing:0">${esc(cl.label)} <span class="sub" style="font-size:11px">· ${cl.size} tracks${cl.avg_bpm?' · '+cl.avg_bpm+' BPM':''}</span></h3>
+    <div style="margin-bottom:10px">${Object.entries(cl.profile).map(([k,v])=>`<span class="tag">${k} ${v}</span>`).join('')}</div>
+    ${cl.samples.map(s=>`<div class="sub" style="cursor:pointer;padding:2px 0" onclick="showDetail(${s.id})">▸ ${esc(s.title)} — ${esc(s.artist)}</div>`).join('')}
+  </div>`).join('');
+}
+
+async function loadPlaylists(){const pls=await api('/api/playlists');
+  $('plList').innerHTML=pls.length?pls.map(p=>`<div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:start">
+      <div><div style="font-weight:700;font-size:15px">${esc(p.name)}</div><div class="sub">${p.source} · ${p.n_tracks} tracks · ${p.n_analyzed||0} analyzed</div></div>
+      <div style="display:flex;gap:6px"><button class="action" onclick="openPlaylist(${p.id})">Analyze</button><button class="ghost" onclick="delPlaylist(${p.id})">✕</button></div>
+    </div></div>`).join(''):'<p class="sub">No playlists yet — build or import one above.</p>';
+}
+async function buildPl(kind,value){$('plMsg').className='msg';$('plMsg').innerHTML='<span class="spin"></span> Building…';
+  try{await postJson('/api/playlists/build',{kind,value:value||null});$('plMsg').textContent='✓ Built';loadPlaylists()}
+  catch(e){$('plMsg').className='msg err';$('plMsg').textContent=e.message}}
+async function delPlaylist(id){await api('/api/playlists/'+id,{method:'DELETE'});$('plDetail').innerHTML='';loadPlaylists()}
+async function importPl(svc){$('plMsg').className='msg';$('plMsg').innerHTML='<span class="spin"></span> Loading '+svc+' playlists…';
+  let list;try{list=await api('/api/playlists/import/'+svc)}catch(e){$('plMsg').className='msg err';$('plMsg').textContent=e.message;return}
+  if(!list.length){$('plMsg').textContent='No playlists found on '+svc;return}
+  const choice=prompt('Import which playlist?\n'+list.map((p,i)=>`${i+1}. ${p.name} (${p.tracks} tracks)`).join('\n')+'\n\nEnter a number:');
+  const idx=parseInt(choice)-1;if(isNaN(idx)||!list[idx])return;$('plMsg').innerHTML='<span class="spin"></span> Importing…';
+  try{await postJson('/api/playlists/import/'+svc,{id:list[idx].id,name:list[idx].name});$('plMsg').textContent='✓ Imported';loadPlaylists()}
+  catch(e){$('plMsg').className='msg err';$('plMsg').textContent=e.message}}
+async function openPlaylist(id){$('plDetail').innerHTML='<div class="card"><span class="spin"></span> Analyzing…</div>';
+  const a=await api('/api/playlists/'+id+'/analyze');
+  if(a.note){$('plDetail').innerHTML=`<div class="card"><h2>${esc(a.name)}</h2><p class="sub">${a.note}</p></div>`;return}
+  const d=a.dna;
+  $('plDetail').innerHTML=`<div class="card"><h2>${esc(a.name)}</h2>
+    <div class="sub" style="margin-bottom:14px">${a.n_tracks} tracks · ${a.n_analyzed} analyzed</div>
+    <div class="grid cols4" style="margin-bottom:16px">
+      <div class="stat"><div class="big gtext">${Math.round(a.cohesion*100)}%</div><div class="sub">cohesion — ${a.cohesion_label}</div></div>
+      <div class="stat a2"><div class="big">${a.harmonic_score!=null?Math.round(a.harmonic_score*100)+'%':'–'}</div><div class="sub">harmonic flow (${a.harmonic_pct}% smooth)</div></div>
+      <div class="stat a3"><div class="big">${d.bpm}</div><div class="sub">avg BPM (±${d.bpm_spread})</div></div>
+      <div class="stat a4"><div class="big" style="font-size:15px;padding-top:9px">${a.use_case.label}</div><div class="sub">best for · ${a.mood_label}</div></div>
+    </div>
+    <div class="grid cols2">
+      <div><h3>Energy &amp; valence arc</h3><canvas id="arcChart"></canvas></div>
+      <div><h3>Harmonic flow (Camelot transitions)</h3>
+        <div style="max-height:230px;overflow:auto">${a.harmonic_flow.map(fl=>`<div class="featrow"><span class="sub">${esc(fl.from)} → ${esc(fl.to)}</span><span><span class="tag">${fl.from_key||'?'}→${fl.to_key||'?'}</span> <b style="color:${fl.score>=.85?'#a855f7':fl.score>=.5?'#e0a458':'#e0607e'}">${fl.score!=null?Math.round(fl.score*100)+'%':'–'}</b></span></div>`).join('')}</div></div>
+    </div>
+    ${a.outliers.length?`<h3 style="margin-top:14px">Outliers (don't fit the vibe)</h3>${a.outliers.map(o=>`<span class="tag">${esc(o.title)} — ${esc(o.artist)}</span>`).join('')}`:''}
+    ${a.duplicates.length?`<h3 style="margin-top:14px">Duplicates</h3>${a.duplicates.map(o=>`<span class="tag">${esc(o.title)} — ${esc(o.artist)}</span>`).join('')}`:''}
+    <h3 style="margin-top:16px">Suggested re-order (smooth harmonic + energy build)</h3>
+    <ol class="sub" style="padding-left:20px;line-height:1.8">${a.reorder.map(r=>`<li>${esc(r.title)} — ${esc(r.artist)} <span class="tag">${r.camelot||'?'}</span></li>`).join('')}</ol>
+    <div style="margin-top:14px"><h3>Breakdown</h3>${a.genres.map(g=>`<span class="tag">${esc(g.name)} ×${g.count}</span>`).join('')} ${a.eras.map(e=>`<span class="tag">${e.name} ×${e.count}</span>`).join('')}</div>
+  </div>`;
+  mkChart('arcChart',{type:'line',data:{labels:a.arc.map(x=>x.pos),datasets:[
+    {label:'energy',data:a.arc.map(x=>x.energy),borderColor:'#e0607e',backgroundColor:c=>gfill(c.chart.ctx,'rgba(224,96,126,.25)','rgba(224,96,126,0)'),fill:true,tension:.4},
+    {label:'valence',data:a.arc.map(x=>x.valence),borderColor:'#e0a458',tension:.4}]},
+    options:{plugins:{tooltip:{callbacks:{title:i=>a.arc[i[0].dataIndex].title}}},scales:{y:{min:0,max:1}}}});
+}
+
+let wrappedInit=false;
+async function loadWrapped(){
+  const w=await api('/api/wrapped'+($('wrappedYear').value?'?year='+$('wrappedYear').value:''));
+  if(!wrappedInit){$('wrappedYear').innerHTML='<option value="">All time</option>'+(w.available_years||[]).map(y=>`<option value="${y}">${y}</option>`).join('');wrappedInit=true}
+  const h=w.headline;
+  $('wrapped').innerHTML=`<div class="grid cols4 section">
+    ${[['⏱️','Minutes',h.minutes,'listened','a2'],['▶️','Plays',h.plays,'','',],['💿','Tracks',h.tracks,'unique','a3'],['🎤','Artists',h.artists,'','a4']]
+      .map(([ic,t,v,s,c])=>`<div class="stat ${c||''}"><span class="ic">${ic}</span><div class="big count" data-to="${v}">0</div><div class="sub">${t}</div><div class="sub" style="font-size:11px">${s}</div></div>`).join('')}</div>
+    <div class="grid cols2">
+      <div class="card"><h3>Your story — ${w.year}</h3>${w.narrative.map(l=>`<p style="margin:7px 0;font-size:14px">${l.replace(/\*\*(.+?)\*\*/g,'<b style="color:var(--accent)">$1</b>')}</p>`).join('')}</div>
+      <div class="card"><h3>Top tracks</h3><ol style="padding-left:18px;line-height:1.9">${w.top_tracks.map(t=>`<li>${esc(t.title)} — ${esc(t.artist)} <span class="sub">(${t.plays})</span></li>`).join('')}</ol></div>
+      <div class="card"><h3>Top artists</h3><ol style="padding-left:18px;line-height:1.9">${w.top_artists.map(t=>`<li>${esc(t.name)} <span class="sub">(${t.plays})</span></li>`).join('')}</ol></div>
+      <div class="card"><h3>Highlights</h3>
+        <div class="featrow"><b>Top genre</b><span>${w.top_genre||'–'}</span></div>
+        <div class="featrow"><b>Peak hour</b><span>${w.peak_hour||'–'}</span></div>
+        <div class="featrow"><b>Mood</b><span>${w.mood||'–'}</span></div>
+        <div class="featrow"><b>Avg tempo</b><span>${w.avg_bpm||'–'} BPM</span></div></div>
+    </div>`;
+  animateCounts();
+}
+
+refreshAll();
+</script>
+</body>
+</html>
