@@ -629,7 +629,7 @@ function renderLib(){
     return typeof x==='string'?dir*x.localeCompare(y):dir*(x-y)});
   $('libCount').textContent=rows.length.toLocaleString()+' tracks';
   $('libTable').querySelector('tbody').innerHTML=rows.map(t=>`<tr style="cursor:pointer" onclick="showDetail(${t.id})">
-    <td style="font-weight:600">${esc(t.title)}</td><td>${esc(t.artist)}</td><td>${t.genre?`<span class="tag">${esc(t.genre)}</span>`:''}</td>
+    <td style="font-weight:600" title="${esc(t.title)}">${esc(t.clean_title||t.title)}${t.movie_album?` <span class="tag" style="font-weight:400;opacity:.85">${esc(t.movie_album)}</span>`:''}${t.is_short?` <span class="tag" style="font-weight:400;color:var(--warn)">short</span>`:''}${t.is_non_music?` <span class="tag" style="font-weight:400;color:var(--faint)">non-music</span>`:''}</td><td>${esc(t.artist)}</td><td>${t.genre?`<span class="tag">${esc(t.genre)}</span>`:''}</td>
     <td>${t.plays}</td><td>${t.bpm??''}</td><td>${t.camelot?`<span class="tag">${t.camelot}</span>`:(t.key?t.key+' '+(t.mode||''):'')}</td>
     <td>${fbar(t.energy)}</td><td>${fbar(t.valence)}</td></tr>`).join('')||'<tr><td colspan="8" class="sub" style="padding:20px;text-align:center">No tracks match these filters.</td></tr>';
   document.querySelectorAll('#libTable th.sortable').forEach(th=>{

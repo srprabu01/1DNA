@@ -31,6 +31,10 @@ than a missing one, so any field that cannot be resolved confidently is left
 `NULL` rather than guessed. The raw `title` and `artist` are **never mutated**,
 so the ETL is idempotent and re-runnable.
 
+The result, in the Library — clean song names with their movie/album tagged:
+
+![Normalized library](screenshots/library-normalized.png)
+
 ---
 
 ## Architecture

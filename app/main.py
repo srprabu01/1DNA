@@ -266,6 +266,7 @@ def list_tracks(q: str = "", limit: int = 100):
     with connect() as con:
         rows = con.execute(
             f"""SELECT t.id, t.title, t.artist, t.genre, t.preview_url, t.release_date,
+                      t.clean_title, t.movie_album, t.is_short, t.is_non_music,
                       f.bpm, f.key, f.mode, f.camelot, f.energy, f.valence, f.danceability,
                       f.acousticness, f.brightness, f.instrumentalness, f.loudness_db,
                       COALESCE(p.n, 0) plays

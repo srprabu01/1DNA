@@ -70,10 +70,12 @@ _KNOWN_BANDS = {"itzy", "bibi", "max", "illenium", "bts", "curv", "mamamoo", "tw
 _HANDLE_MAP = {"arrahman": "A.R. Rahman", "saiabhyankkar": "Sai Abhyankkar", "mcsai": "MC Sai",
                "anirudhofficial": "Anirudh Ravichander", "thisisdsp": "Devi Sri Prasad"}
 
-# From "X" / (From X) / [From X] / - From X   (curly or straight quotes, optional;
-# capture stops at a closing quote/bracket or end of string)
+# (From "X") / [From X] / - From "X"   — "From" MUST follow a bracket or a dash,
+# so a bare "from"/"out of" inside a real title ("Far From Home", "Out of Time")
+# is never mistaken for a movie marker. Capture stops at a closing quote/bracket
+# or end of string.
 _FROM = re.compile(
-    r"[\(\[]?\s*[-–—]?\s*(?:from|out of)\s+[\"“‘']?(?P<m>.+?)[\"”’']?\s*(?:[\)\]]|$)", re.I)
+    r"(?:[\(\[]|[-–—])\s*from\s+[\"“‘']?(?P<m>.+?)[\"”’']?\s*(?:[\)\]]|$)", re.I)
 _FEAT = re.compile(r"\s*[\(\[]?\s*(?:feat\.?|ft\.?|featuring|with)\b[^)\]]*[\)\]]?", re.I)
 _QUOTED_MV = re.compile(r"^(?P<a>.+?)\s*['\"‘“](?P<s>[^'\"’”]+)['\"’”]\s*(?:official\s*)?(?:m/?v|music\s*video)?", re.I)
 _VERSION_TAIL = re.compile(

@@ -21,6 +21,11 @@ CREATE TABLE IF NOT EXISTS tracks (
     release_date TEXT,
     popularity INTEGER,
     enriched INTEGER DEFAULT 0,
+    clean_title TEXT,
+    movie_album TEXT,
+    is_short INTEGER,
+    is_non_music INTEGER,
+    normalized_at TEXT,
     UNIQUE(title, artist)
 );
 
