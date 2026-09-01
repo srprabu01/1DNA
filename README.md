@@ -1,4 +1,4 @@
-# 🎧 Music DNA Analyzer &nbsp;·&nbsp; `1DNA`
+# Music DNA Analyzer &nbsp;·&nbsp; `1DNA`
 
 **Deep, local analysis of your music taste across Spotify, YouTube / YouTube Music, and Apple Music.** Macro listening analytics, Shazam-style signal-level DSP on *every* track, a taste model trained on your play history, and a Spotify-style dashboard — all running on your own machine. Your data never leaves your PC.
 
@@ -13,11 +13,11 @@
 
 ---
 
-## ✨ What it does
+## What it does
 
 Point it at your listening history and it does three things no streaming app does together: it **measures the actual audio** of every track you've played, it **models your taste** from that measurement, and it lets you **explore all of it** in an interactive dashboard.
 
-### 🔬 Signal-level analysis of every track
+### Signal-level analysis of every track
 For each track it fetches a 30-second preview (via Deezer — free, no key) and runs real DSP with `librosa`:
 
 - **Rhythm** — BPM, tempo confidence, beat regularity, onset density, time-signature estimate, micro-timing
@@ -27,7 +27,7 @@ For each track it fetches a 30-second preview (via Deezer — free, no key) and 
 - **Estimated 0–1 scores** — energy, danceability, valence, acousticness, instrumentalness, speechiness, liveness
 - **Per-track visuals** — mel-spectrogram, chromagram, waveform, tempogram, and an interactive Camelot wheel
 
-### 🧭 Interactive exploration
+### Interactive exploration
 
 <table>
 <tr>
@@ -48,13 +48,13 @@ For each track it fetches a 30-second preview (via Deezer — free, no key) and 
 </tr>
 </table>
 
-### 📚 Sortable, filterable library
+### Sortable, filterable library
 
 ![Library](docs/screenshots/library.png)
 
 Every analyzed track in one sortable, filterable table — click a column to sort, filter by genre or analysis status, and open any track for its full signal breakdown. A one-click **Merge duplicates** tool fixes play counts split across mis-parsed rows (see below).
 
-### 🎚️ And more
+### And more
 
 - **Playlist analyzer** — cohesion score, energy/valence arc, **harmonic-flow analysis** (Camelot transition scoring), outliers, duplicates, use-case classification, and a suggested re-order for smooth flow.
 - **Recommendations** — walks Deezer's related-artist graph from your top artists, then re-ranks candidates by how close their *measured* audio features are to your taste vector.
@@ -62,7 +62,7 @@ Every analyzed track in one sortable, filterable table — click a column to sor
 
 ---
 
-## 🧬 `deepcut` — the standalone analysis engine
+## `deepcut` — the standalone analysis engine
 
 Inside [`deepcut/`](deepcut/) is a **self-contained CLI** that reads audio files, measures them, embeds them with frozen foundation models (MERT + CLAP), and lets you retrieve by example, by sentence, by tempo, or by a taste probe you train yourself. It talks to no streaming platform, so nothing can switch it off.
 
@@ -78,13 +78,13 @@ It can bootstrap directly from this app's cached previews — see [`deepcut/READ
 
 ---
 
-## 🧹 Smart de-duplication
+## Smart de-duplication
 
 YouTube watch-history titles like `"Vaaste Song: Dhvani Bhanushali | Nikhil D'Souza | …"` get parsed inconsistently across sources, so the same song lands in several rows and its play count splits (a song you played 10× can show as 1). The built-in **Merge duplicates** tool consolidates them with a deliberately high-precision matcher — song-title containment + real shared-artist evidence + a document-frequency filter — so it fixes the splits without ever fusing two genuinely different songs.
 
 ---
 
-## 🚀 Quickstart
+## Quickstart
 
 ```bash
 git clone https://github.com/srprabu01/1DNA.git
@@ -114,7 +114,7 @@ Unlocks CLAP text-prompt search and embedding-based similarity/taste on the **Di
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
 ```
 app/
@@ -137,13 +137,13 @@ deepcut/         standalone MERT + CLAP analysis/retrieval engine
 
 ---
 
-## 🔒 Privacy
+## Privacy
 
 Everything runs locally against a SQLite database on your machine. No listening data, tokens, or audio is uploaded anywhere. This repository contains **only source code** — the personal database, OAuth tokens, cached audio, and `.env` are all git-ignored.
 
 ---
 
-## 📄 License
+## License
 
 MIT — see [`LICENSE`](LICENSE).
 

@@ -275,7 +275,8 @@ canvas{max-height:330px}
     <select id="libGenre" onchange="renderLib()"><option value="">All genres</option></select>
     <select id="libAnalyzed" onchange="renderLib()">
       <option value="">All tracks</option><option value="1">Analyzed</option><option value="0">Not analyzed</option></select>
-    <button class="ghost" id="dedupeBtn" onclick="dedupe()" title="Combine duplicate rows of the same song so play counts are correct" style="margin-left:auto">Merge duplicates</button>
+    <button class="ghost" id="normBtn" onclick="normalizeLib()" title="Clean song names, identify the movie/album, and flag Shorts & non-music (raw titles kept)" style="margin-left:auto">Normalize</button>
+    <button class="ghost" id="dedupeBtn" onclick="dedupe()" title="Combine duplicate rows of the same song so play counts are correct">Merge duplicates</button>
     <span class="sub" id="libCount"></span>
   </div>
   <div class="msg" id="dedupeMsg" style="margin-top:-8px;margin-bottom:14px;min-height:0"></div>
@@ -412,7 +413,7 @@ canvas{max-height:330px}
         <button class="action blue" id="enrichBtn" onclick="enrich()">1 · Match metadata</button>
         <button class="action" id="analyzeBtn" onclick="analyze()">2 · Analyze audio</button>
         <button class="ghost" id="lyricsBtn" onclick="fetchLyrics()">3 · Fetch lyrics</button>
-        <button class="ghost" id="autoBtn" onclick="toggleAuto()">▶ Auto-process all</button>
+        <button class="ghost" id="autoBtn" onclick="toggleAuto()">Auto-process all</button>
         <button class="ghost" id="retryBtn" onclick="analyze(true)">↻ Retry failed</button>
       </div>
       <div class="msg" id="procMsg"></div>
@@ -491,8 +492,8 @@ async function refreshAll(){
     const on=st.spotify_connected||st.ytmusic_connected;
     $('conn').className='pill'+(on?' ok':'');
     $('conn').innerHTML=`<span class="dot"></span><span>${st.spotify_connected?'Spotify':''}${st.spotify_connected&&st.ytmusic_connected?' + ':''}${st.ytmusic_connected?'YT Music':''}${on?' live':'not connected'}</span>`;
-    if($('spHint'))$('spHint').innerHTML=st.spotify_oauth_ready?'One click to sign in with your Spotify account.':'⚠ One-time setup: create a free Spotify app &amp; add its Client ID/Secret to <b>.env</b> (see README) — then this button works. Or use Advanced keyless login.';
-    if($('ytHint'))$('ytHint').innerHTML=st.youtube_oauth_ready?'Sign in with Google — pulls your liked music, playlists &amp; subscribed artists.':'⚠ One-time setup needed (Web OAuth client in Google Cloud) — see README. Or use the header/Takeout options below.';
+    if($('spHint'))$('spHint').innerHTML=st.spotify_oauth_ready?'One click to sign in with your Spotify account.':'One-time setup: create a free Spotify app &amp; add its Client ID/Secret to <b>.env</b> (see README) — then this button works. Or use Advanced keyless login.';
+    if($('ytHint'))$('ytHint').innerHTML=st.youtube_oauth_ready?'Sign in with Google — pulls your liked music, playlists &amp; subscribed artists.':'One-time setup needed (Web OAuth client in Google Cloud) — see README. Or use the header/Takeout options below.';
     renderOverview(st.overview);
     loadCharts();loadDNA();loadLyrics();loadPatterns();searchLib();loadRecs();
   }catch(e){console.error(e)}
@@ -500,13 +501,13 @@ async function refreshAll(){
 
 function renderOverview(o){
   const cards=[
-    ['🎵','Total plays',o.plays,0,''],['💿','Unique tracks',o.tracks,0,'a2'],
-    ['🎤','Artists',o.artists,0,'a3'],['⏱️','Listening hours',o.listening_hours,1,'a4'],
-    ['🔗','Matched',o.enriched,0,'a2'],['🧬','Analyzed',o.analyzed,0,''],
+    ['','Total plays',o.plays,0,''],['','Unique tracks',o.tracks,0,'a2'],
+    ['','Artists',o.artists,0,'a3'],['','Listening hours',o.listening_hours,1,'a4'],
+    ['','Matched',o.enriched,0,'a2'],['','Analyzed',o.analyzed,0,''],
   ];
   $('statCards').innerHTML=cards.map(([ic,t,v,dec,cls])=>`<div class="stat ${cls}"><span class="ic">${ic}</span>
     <div class="big count" data-to="${v||0}" data-dec="${dec}">0</div><div class="sub">${t}</div></div>`).join('')
-    +`<div class="stat"><span class="ic">📡</span><div class="sub" style="margin-top:2px">${(o.by_source||[]).map(s=>`<span class="tag">${s.source} ${s.plays}</span>`).join('')||'no sources yet'}</div></div>`;
+    +`<div class="stat"><span class="ic"></span><div class="sub" style="margin-top:2px">${(o.by_source||[]).map(s=>`<span class="tag">${s.source} ${s.plays}</span>`).join('')||'no sources yet'}</div></div>`;
   animateCounts();
 }
 
@@ -643,6 +644,19 @@ document.querySelectorAll('#libTable th.sortable').forEach(th=>th.addEventListen
   if(libSort.key===k)libSort.dir*=-1; else libSort={key:k,dir:th.dataset.type==='n'?-1:1};
   renderLib();
 }));
+async function normalizeLib(){
+  const b=$('normBtn'),m=$('dedupeMsg');
+  b.disabled=true;m.className='msg';m.innerHTML='<span class="spin"></span> Previewing normalization…';
+  let p;try{p=await api('/api/normalize/preview?limit=8')}catch(e){m.className='msg err';m.textContent=e.message;b.disabled=false;return}
+  const eg=(p.rows||[]).slice(0,5).map(r=>`• ${(r.raw_title||'').slice(0,30)} -> ${r.clean_title||'?'}${r.movie_album?'  ['+r.movie_album+']':''}`).join('\n');
+  if(!confirm('Normalize every track — clean song names, identify the movie/album, and flag Shorts & non-music.\nYour raw titles are preserved; this is safe to re-run.\n\nSample:\n'+eg+'\n\nProceed?')){m.textContent='';b.disabled=false;return}
+  m.innerHTML='<span class="spin"></span> Running the normalization ETL…';
+  try{const r=await api('/api/normalize/apply',{method:'POST'});
+    m.className='msg';m.textContent=`✓ Normalized ${r.total} tracks · ${r.movie_found} movie/album tags · ${r.shorts} Shorts + ${r.non_music} non-music flagged.`;
+    await searchLib();
+  }catch(e){m.className='msg err';m.textContent=e.message}
+  b.disabled=false;
+}
 async function dedupe(){
   const b=$('dedupeBtn'),m=$('dedupeMsg');
   b.disabled=true;m.className='msg';m.innerHTML='<span class="spin"></span> Scanning for the same song stored under different titles…';
@@ -813,9 +827,9 @@ async function fetchLyrics(){const b=$('lyricsBtn');b.disabled=true;$('procMsg')
   try{const r=await api('/api/lyrics/fetch?limit=10',{method:'POST'});$('procMsg').textContent=`✓ Lyrics for ${r.analyzed}, ${r.missing} not found — ${r.remaining} left`;loadLyrics()}
   catch(e){$('procMsg').className='msg err';$('procMsg').textContent=e.message}finally{b.disabled=false}}
 let auto=false;
-async function toggleAuto(){auto=!auto;$('autoBtn').textContent=auto?'⏸ Stop auto':'▶ Auto-process all';
+async function toggleAuto(){auto=!auto;$('autoBtn').textContent=auto?'Stop auto':'Auto-process all';
   while(auto){const e=await enrich();if(e&&e.remaining===0){const a=await analyze();if(a&&a.remaining===0)break}}
-  auto=false;$('autoBtn').textContent='▶ Auto-process all'}
+  auto=false;$('autoBtn').textContent='Auto-process all'}
 async function clearData(){if(!confirm('Delete ALL tracks, plays, features, playlists and lyrics? This cannot be undone.'))return;
   await api('/api/data/clear',{method:'POST'});$('procMsg').textContent='✓ All data cleared.';refreshAll()}
 
@@ -848,7 +862,7 @@ async function loadDiscover(){
   api('/api/embed/status').then(s=>{
     $('semStatus').innerHTML = s.available
       ? (s.embedded>0? `✓ ${s.embedded} previews embedded — search away.`
-         : `⚠ Model ready but nothing embedded yet. <button class="ghost" onclick="embedPreviews()">Embed ${Math.min(s.with_preview,2691)} previews</button>`)
+         : `Model ready but nothing embedded yet. <button class="ghost" onclick="embedPreviews()">Embed ${Math.min(s.with_preview,2691)} previews</button>`)
       : `<span style="color:var(--warn)">Semantic search is off.</span> ${s.note} — then reload. <span class="sub">(GPU recommended; ${s.with_preview} previews ready.)</span>`;
   });
 }
@@ -872,7 +886,7 @@ async function fitTaste(){
   if(!r.available){$('tasteMsg').className='msg err';$('tasteMsg').textContent=r.note;return}
   $('tasteMsg').textContent=`✓ Fit on ${r.n_tracks} tracks · held-out AUC ${r.auc??'–'} · space: ${r.space}`;
   $('tasteDrivers').innerHTML = r.drivers.length? '<div class="sub" style="margin-bottom:4px">What drives your taste:</div>'+r.drivers.slice(0,8).map(d=>`<span class="tag" style="color:${d.weight>0?'var(--accent)':'var(--accent4)'}">${d.weight>0?'▲':'▼'} ${esc(d.feature)}</span>`).join('') : '<span class="sub">(driver names available on the DSP feature space; embeddings are not human-labeled)</span>';
-  $('tasteTop').innerHTML=r.top.map(t=>trackCard(t,'❤ '+Math.round(t.taste*100)+'%')).join('');
+  $('tasteTop').innerHTML=r.top.map(t=>trackCard(t,''+Math.round(t.taste*100)+'%')).join('');
   $('tasteGems').innerHTML=r.gems.length?r.gems.map(t=>trackCard(t,Math.round(t.taste*100)+'%')).join(''):'<p class="sub">No hidden gems found (you\'ve played your favourites).</p>';
 }
 
@@ -959,10 +973,10 @@ function drawNetwork(net,gc){
 async function loadTrends(){
   const [mood,disc,conc,cal]=await Promise.all([api('/api/stats/mood-over-time'),api('/api/stats/discovery'),api('/api/stats/concentration'),api('/api/stats/calendar')]);
   $('trendCards').innerHTML=[
-    ['🧭','Discovery ratio',disc.discovery_ratio!=null?Math.round(disc.discovery_ratio*100)+'%':'–',disc.explorer_label||''],
-    ['🎯','Artist concentration',conc.available?conc.gini:'–',conc.available?conc.label:''],
-    ['🏆','Top-5 share',conc.available?conc.top5_pct+'%':'–','of all plays'],
-    ['📅','Active days',cal.active_days,'with listening'],
+    ['','Discovery ratio',disc.discovery_ratio!=null?Math.round(disc.discovery_ratio*100)+'%':'–',disc.explorer_label||''],
+    ['','Artist concentration',conc.available?conc.gini:'–',conc.available?conc.label:''],
+    ['','Top-5 share',conc.available?conc.top5_pct+'%':'–','of all plays'],
+    ['','Active days',cal.active_days,'with listening'],
   ].map(([ic,t,v,s])=>`<div class="stat"><span class="ic">${ic}</span><div class="big">${v}</div><div class="sub">${t}</div><div class="sub" style="font-size:11px">${s}</div></div>`).join('');
   mkChart('moodChart',{type:'line',data:{labels:mood.map(m=>m.month),datasets:[
     {label:'valence',data:mood.map(m=>m.valence),borderColor:'#e0a458',backgroundColor:c=>gfill(c.chart.ctx,'rgba(224,164,88,.25)','rgba(224,164,88,0)'),fill:true,tension:.4,pointRadius:2},
@@ -1047,7 +1061,7 @@ async function loadWrapped(){
   if(!wrappedInit){$('wrappedYear').innerHTML='<option value="">All time</option>'+(w.available_years||[]).map(y=>`<option value="${y}">${y}</option>`).join('');wrappedInit=true}
   const h=w.headline;
   $('wrapped').innerHTML=`<div class="grid cols4 section">
-    ${[['⏱️','Minutes',h.minutes,'listened','a2'],['▶️','Plays',h.plays,'','',],['💿','Tracks',h.tracks,'unique','a3'],['🎤','Artists',h.artists,'','a4']]
+    ${[['','Minutes',h.minutes,'listened','a2'],['','Plays',h.plays,'','',],['','Tracks',h.tracks,'unique','a3'],['','Artists',h.artists,'','a4']]
       .map(([ic,t,v,s,c])=>`<div class="stat ${c||''}"><span class="ic">${ic}</span><div class="big count" data-to="${v}">0</div><div class="sub">${t}</div><div class="sub" style="font-size:11px">${s}</div></div>`).join('')}</div>
     <div class="grid cols2">
       <div class="card"><h3>Your story — ${w.year}</h3>${w.narrative.map(l=>`<p style="margin:7px 0;font-size:14px">${l.replace(/\*\*(.+?)\*\*/g,'<b style="color:var(--accent)">$1</b>')}</p>`).join('')}</div>

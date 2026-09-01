@@ -490,4 +490,18 @@ def dedupe_apply():
         return dedupe.apply(con)
 
 
+# ---------- song-normalization ETL (see docs/ETL.md) ----------
+
+@app.get("/api/normalize/preview")
+def normalize_preview(limit: int = 60):
+    from .maintenance import normalize
+    return {"rows": normalize.preview(limit=limit)}
+
+
+@app.post("/api/normalize/apply")
+def normalize_apply():
+    from .maintenance import normalize
+    return normalize.run()
+
+
 app.mount("/static", StaticFiles(directory=STATIC), name="static")

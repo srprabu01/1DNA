@@ -215,6 +215,21 @@ def _title_tokens(d):
             if len(t) >= 5 and t not in _PROP_STOP}
 
 
+_SHORTS_RE = re.compile(r"#\s*shorts?\b", re.I)
+
+
+def _is_short(entry, info, short_sec):
+    """A YouTube Short: '#shorts' in the title, a /shorts/ URL, or a sub-threshold
+    clip that isn't recognised as music."""
+    if _SHORTS_RE.search(entry.get("title", "") or ""):
+        return True
+    if "/shorts/" in (entry.get("titleUrl", "") or ""):
+        return True
+    if info and info.get("seconds") and info["seconds"] < short_sec and not _is_music(entry):
+        return True
+    return False
+
+
 def import_authoritative(content: bytes, token=None, short_sec: int = 45,
                          propagate: bool = True, dry_run: bool = False):
     """Import a Takeout history, keeping music by three layers:
@@ -315,15 +330,15 @@ def import_authoritative(content: bytes, token=None, short_sec: int = 45,
                         "times": [w["time"] for w in d["w"]]})
                 continue
             info = cls.get(vid)
-            if (reason[vid] == "signal" and info and info["seconds"]
-                    and info["seconds"] < short_sec and not _is_music(d["entry"])):
+            if _is_short(d["entry"], info, short_sec):
                 shorts += 1
                 if dry_run:
                     excluded.append({
                         "title": d["w"][0]["title"].replace("Watched ", ""),
                         "channel": d["channel"], "plays": len(d["w"]),
-                        "category": _CATEGORY_NAMES.get(info["category"], info["category"]),
-                        "reason": "short (<%ds)" % short_sec, "video_id": vid})
+                        "category": (_CATEGORY_NAMES.get(info["category"], info["category"])
+                                     if info else None),
+                        "reason": "short", "video_id": vid})
                 continue
             breakdown[reason[vid]] += 1
             songs += 1

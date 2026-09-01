@@ -3,6 +3,7 @@
 Gives us: 30-second preview MP3s (input for signal analysis), album genre,
 release date, and artist-relation data used by the recommender.
 """
+import re
 import time
 
 import requests
@@ -11,6 +12,37 @@ from ..db import connect
 
 API = "https://api.deezer.com"
 _genre_cache = {}
+
+_BRACKETS = re.compile(r"[\(\[\{][^)\]\}]*[\)\]\}]")
+# YouTube titles bury the song name: "Nijamellam Video Song | Singers | Movie".
+# Everything from the first of these markers on is noise, so the leading phrase
+# is the song. Used only as a fallback when the raw title fails to match.
+_SONG_CUT = re.compile(
+    r"\s*(?:\||[-–—]| video| song| official| lyric| promo| teaser| from | ft\.?"
+    r"| feat\.?| with lyrics| 4k| 8k| hd)\b", re.I)
+
+
+_NOISE_WORDS = {"official", "music", "video", "audio", "lyric", "lyrical", "full",
+                "hd", "4k", "8k", "song", "songs", "new", "presenting", "presents",
+                "the", "from", "feat", "ft", "cover"}
+
+
+def _clean_song(text):
+    t = _BRACKETS.sub(" ", text or "")
+    core = _SONG_CUT.split(t, maxsplit=1)[0]
+    words = re.sub(r"\s+", " ", core).strip(" -–—|:\"").split()
+    while words and words[0].lower() in _NOISE_WORDS:
+        words.pop(0)
+    while words and words[-1].lower() in _NOISE_WORDS:
+        words.pop()
+    core = " ".join(words)
+    # reject an all-noise or too-short leftover (e.g. a title that *starts* with
+    # "Official Lyric Video | …" leaves nothing usable)
+    return core if len(core) >= 3 and any(w.lower() not in _NOISE_WORDS for w in words) else ""
+
+
+def _tok(s):
+    return {w for w in re.split(r"[^a-z0-9]+", (s or "").lower()) if len(w) >= 3}
 
 
 def _get(path, params=None):
@@ -39,15 +71,43 @@ def fresh_preview(deezer_id):
         return None
 
 
+def _first(q):
+    try:
+        hits = _get("/search", {"q": q, "limit": 1}).get("data") or []
+        return hits[0] if hits else None
+    except Exception:
+        return None
+
+
+def _plausible(hit, song, artist):
+    """Guard the loose fallbacks: the hit's title must LEAD with our song name
+    (so 'So Baby' won't grab 'Baby Songs To Go To Sleep'), or the artist must
+    genuinely match (covers the movie-as-artist rows where the composer differs)."""
+    ht = (hit.get("title") or "").lower().strip()
+    s = (song or "").lower().strip()
+    if s and (ht.startswith(s) or (len(ht) >= 4 and s.startswith(ht))):
+        return True
+    return bool(_tok(artist) & _tok((hit.get("artist") or {}).get("name")))
+
+
 def search_track(title, artist):
-    q = f'track:"{title}" artist:"{artist}"'
-    data = _get("/search", {"q": q, "limit": 1})
-    hits = data.get("data", [])
-    if not hits:
-        # looser search
-        data = _get("/search", {"q": f"{artist} {title}", "limit": 1})
-        hits = data.get("data", [])
-    return hits[0] if hits else None
+    song = _clean_song(title)
+    # 1) exact-field query is self-validating — trust it directly
+    hit = _first(f'track:"{title}" artist:"{artist}"')
+    if hit:
+        return hit
+    # 2) every looser query must pass the plausibility guard (a bare
+    #    "artist title" search on a garbled title can return the wrong song)
+    queries = [f"{artist} {title}"]
+    if song and song.lower() != (title or "").strip().lower():
+        queries.append(f"{song} {artist}")
+        if len(_tok(song)) >= 2:   # a bare song search is only safe when distinctive
+            queries.append(f'track:"{song}"')
+    for q in queries:
+        hit = _first(q)
+        if hit and _plausible(hit, song or title, artist):
+            return hit
+    return None
 
 
 def album_genre(album_id):
