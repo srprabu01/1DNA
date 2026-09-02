@@ -153,6 +153,7 @@ def _migrate(con):
 
 def init_db():
     with connect() as con:
+        con.execute("PRAGMA journal_mode=WAL")  # persist on the DB file; readers + one writer overlap
         con.executescript(SCHEMA)
         _migrate(con)
 

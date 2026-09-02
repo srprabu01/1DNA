@@ -1,0 +1,29 @@
+# Standalone one-command run:  docker compose up -d --build
+# Then open http://localhost:8000
+services:
+  music-analyzer:
+    build: .
+    image: music-dna:latest
+    container_name: music-dna
+    ports:
+      - "${MUSIC_PORT:-8000}:8000"     # container stays 8000 so OAuth redirects/healthcheck are stable
+    environment:
+      MUSIC_HOST: "0.0.0.0"
+      MUSIC_DATA_DIR: "/data"
+    env_file:
+      - path: .env                     # optional OAuth keys; the import+Deezer+DSP path needs none
+        required: false
+    volumes:
+      - music-data:/data               # NAMED volume (not a bind mount): SQLite WAL file-locking
+                                        # misbehaves on Windows/OneDrive/network shares
+    mem_limit: 4g                       # bound RAM so a big parallel run never trips the OOM-killer
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/healthz',timeout=4).status==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 40s
+      retries: 3
+
+volumes:
+  music-data:

@@ -8,6 +8,7 @@ librosa>=0.10.2
 soundfile>=0.12.1
 matplotlib>=3.8
 vaderSentiment>=3.3.2
+pebble>=5.0            # crash-isolated process pool for parallel audio analysis
 
 # Optional — enables the semantic layer (CLAP text-prompt search + embedding-based
 # similarity/taste on the Discover tab). ~600 MB model download; GPU recommended.

@@ -84,19 +84,29 @@ YouTube watch-history titles like `"Vaaste Song: Dhvani Bhanushali | Nikhil D'So
 
 ---
 
-## Quickstart
+## Run it standalone
 
+The whole thing is a self-contained web app. Pick one:
+
+**Docker (recommended — no Python setup, runs anywhere):**
 ```bash
 git clone https://github.com/srprabu01/1DNA.git
 cd 1DNA
+docker compose up -d --build      # then open http://localhost:8000
+```
+The image bundles the audio codecs (ffmpeg + libsndfile), your data persists in a named volume across restarts, and a `/healthz` check keeps it supervised.
+
+**One command, no Docker:**
+```bash
+./run.ps1        # Windows  (or  ./run.sh  on macOS/Linux/WSL)
+```
+Creates a virtualenv, installs deps once, launches `python -m app`, and opens the dashboard.
+
+**Manual:**
+```bash
 pip install -r requirements.txt
-
-# See the whole dashboard alive with demo data (no accounts needed):
-python seed_demo.py
-
-# Launch:
-python -m uvicorn app.main:app --port 8000
-# open http://localhost:8000
+python seed_demo.py               # optional: demo data, no accounts needed
+python -m app                     # single entrypoint (honours MUSIC_HOST/MUSIC_PORT)
 ```
 
 Then in the **Sources** tab, connect your accounts or import data exports (Spotify *Extended Streaming History*, Google Takeout *watch-history*, Apple Music *Play History* CSV), and run the pipeline: **Match metadata → Analyze audio → (optional) Fetch lyrics**.
@@ -120,7 +130,7 @@ Unlocks CLAP text-prompt search and embedding-based similarity/taste on the **Di
 app/
   ingest/        Spotify / YouTube Data API / YT-Music / Apple / Takeout importers
   enrich/        Deezer metadata + 30s preview matching
-  audio/         librosa DSP, structure segmentation, Camelot, server-side visuals
+  audio/         librosa DSP + crash-isolated parallel pipeline (all cores), Camelot, visuals
   analytics/     macro stats, clusters, PCA research, taste probe, similarity
   lyrics/        sentiment + vocabulary analysis
   playlist/      cohesion, harmonic-flow, energy-arc, re-order

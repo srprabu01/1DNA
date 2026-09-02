@@ -50,6 +50,13 @@ def analyze_preview(preview_url, track_id):
     y, sr = librosa.load(str(mp3), sr=22050, mono=True)
     if len(y) < sr:  # under 1 second of audio — junk
         raise ValueError("preview too short")
+    return _extract_features(y, sr)
+
+
+def _extract_features(y, sr):
+    """Pure DSP over a mono 22.05 kHz signal -> the feature dict. Identical math to
+    before; no network/disk/DB, so it is safe to run inside a worker process."""
+    import librosa
 
     # ---- harmonic / percussive separation (used by several features) ----
     y_h, y_p = librosa.effects.hpss(y)

@@ -1,20 +1,34 @@
 import os
 from pathlib import Path
+
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-DATA_DIR = BASE_DIR / "data"
-CACHE_DIR = DATA_DIR / "audio_cache"
-DB_PATH = DATA_DIR / "music.db"
+
+# Load .env FIRST so its values are available below. load_dotenv does NOT override
+# real environment variables, so container/compose-injected values always win.
+load_dotenv(BASE_DIR / ".env")
+
+
+def _path_env(var, default):
+    return Path(os.getenv(var, str(default)))
+
+
+# Paths are env-overridable so a container can put the DB + cache on a mounted volume.
+DATA_DIR = _path_env("MUSIC_DATA_DIR", BASE_DIR / "data")
+CACHE_DIR = _path_env("MUSIC_CACHE_DIR", DATA_DIR / "audio_cache")
+DB_PATH = _path_env("MUSIC_DB_PATH", DATA_DIR / "music.db")
 TOKENS_PATH = DATA_DIR / "spotify_tokens.json"
 SPOTIFY_OAUTH_PATH = DATA_DIR / "spotify_oauth.json"
 YT_OAUTH_PATH = DATA_DIR / "ytmusic_oauth.json"
 YT_DEVICECODE_PATH = DATA_DIR / "ytmusic_devicecode.json"
 
-DATA_DIR.mkdir(exist_ok=True)
-CACHE_DIR.mkdir(exist_ok=True)
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
-load_dotenv(BASE_DIR / ".env")
+# Server binding — default to loopback for a bare local run; Docker sets 0.0.0.0.
+HOST = os.getenv("MUSIC_HOST", "127.0.0.1")
+PORT = int(os.getenv("MUSIC_PORT", "8000"))
 
 SPOTIFY_CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID", "")
 SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET", "")

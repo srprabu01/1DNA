@@ -20,6 +20,13 @@ def index():
     return FileResponse(STATIC / "index.html")
 
 
+@app.get("/healthz")
+def healthz():
+    # No-I/O liveness probe for the container healthcheck (unlike /api/status,
+    # which runs analytics queries and can stall during a busy analyze run).
+    return {"status": "ok"}
+
+
 # ---------- status / connections ----------
 
 @app.get("/api/status")
@@ -180,7 +187,12 @@ def enrich(limit: int = 40):
 
 
 @app.post("/api/analyze")
-def analyze(limit: int = 8, retry_errors: bool = False):
+def analyze(limit: int = 8, retry_errors: bool = False, parallel: bool = False):
+    # parallel=true fans the DSP across all CPU cores (crash-isolated); pass limit=0
+    # for "analyze everything". Serial default keeps the incremental UI flow cheap.
+    if parallel:
+        from .audio.pipeline import analyze_batch_parallel
+        return analyze_batch_parallel(retry_errors=retry_errors, limit=limit or None)
     return audio_features().analyze_batch(limit=limit, retry_errors=retry_errors)
 
 
