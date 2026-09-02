@@ -136,6 +136,31 @@ _ARTIST_IS_SONG = re.compile(
     r"|\bvideo\s*$|\(extended version\)\s*$", re.I)
 
 
+_FEAT_SPLIT = re.compile(r"\s*(?:\bft\.?|\bfeat\.?|featuring|\||,|&)\s*", re.I)
+
+
+def _song_from_garbled_artist(a: str):
+    """Some rows put the SONG in the artist field wrapped in video-title noise:
+      'DANCE MERI RANI: Guru Randhawa Ft Nora Fatehi'  -> ('DANCE MERI RANI', 'Guru Randhawa')
+      'Kusu Kusu Song Ft Nora Fatehi'                  -> ('Kusu Kusu', 'Nora Fatehi')
+    Returns (song, performer) or None."""
+    if not a:
+        return None
+    # "Song: performers"  (a real artist name almost never contains a colon)
+    if ":" in a:
+        pre, post = a.split(":", 1)
+        pre, post = pre.strip(), post.strip()
+        if 3 <= len(pre) <= 70 and (re.search(r"\b(ft\.?|feat|featuring|&)\b", post, re.I)
+                                    or "," in post or "|" in post or " " in post):
+            return pre, _FEAT_SPLIT.split(post, 1)[0].strip() or None
+    # "<Song> [Video] Song/Lyric ... Ft <performer>"
+    m = re.match(r"^(?P<s>.+?)\s+(?:full\s+)?(?:video\s+)?(?:song|lyric(?:al)?)\b(?P<rest>.*)$", a, re.I)
+    if m and len(m.group("s")) >= 3:
+        pm = re.search(r"\b(?:ft\.?|feat\.?|featuring)\s+(?P<p>[^|,]+)", m.group("rest"), re.I)
+        return m.group("s").strip(), (pm.group("p").strip() if pm else None)
+    return None
+
+
 def _is_song_in_artist(a: str) -> bool:
     if not a:
         return False
@@ -195,7 +220,8 @@ def normalize(title: str, artist: str) -> dict:
     a = raw_a.strip()
     art_is_label = bool(_LABEL.search(a))
     art_is_handle = a.startswith("@")
-    art_is_song = _is_song_in_artist(a) and not art_is_label
+    garbled = None if (art_is_label or art_is_handle) else _song_from_garbled_artist(a)
+    art_is_song = garbled is not None or (_is_song_in_artist(a) and not art_is_label)
 
     # 5  working title (handles/tags/emoji removed)
     wt = _scrub(raw_t)
@@ -210,11 +236,15 @@ def normalize(title: str, artist: str) -> dict:
     # 7 + 8  song + artist by branch
     if art_is_song:
         # SWAPPED-PIPE: the song sits in the artist field, the movie leads the title
-        song = _ARTIST_IS_SONG.sub("", a)
+        if garbled:
+            song, artist_out = garbled
+        else:
+            song, artist_out = _ARTIST_IS_SONG.sub("", a), None
         if not movie and "|" in wt:
-            seg0 = wt.split("|", 1)[0]
-            movie = _clean_movie(_YEAR_RE.sub("", _NOISE_RE.sub("", seg0)).strip(" -–—|"))
-        artist_out = _resolve_artist(raw_a, wt, art_is_label=False, art_is_handle=False, swapped=True)
+            seg0 = wt.split("|", 1)[0].strip()
+            if "," not in seg0 and len(seg0.split()) <= 4:   # a movie, not a name-list
+                movie = _clean_movie(_YEAR_RE.sub("", _NOISE_RE.sub("", seg0)).strip(" -–—|"))
+        artist_out = artist_out or _resolve_artist(raw_a, wt, False, False, swapped=True)
     else:
         song = _extract_song_from_title(wt, from_matched=bool(fm))
         artist_out = _resolve_artist(raw_a, wt, art_is_label, art_is_handle)
