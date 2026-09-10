@@ -42,8 +42,9 @@ The result, in the Library — clean song names with their movie/album tagged:
 ```
         EXTRACT                 TRANSFORM                         LOAD
   ┌───────────────┐   ┌────────────────────────────┐   ┌────────────────────┐
-  │ read raw rows │──▶│ 8 ordered rule stages       │──▶│ write 4 new columns │
-  │ (title,artist)│   │ (gates → classify → extract)│   │ (raw kept intact)   │
+  │ read raw rows │──▶│ ordered rule stages         │──▶│ write 4 new columns │
+  │ (title,artist,│   │ (gates → classify → extract │   │ (raw kept intact)   │
+  │  album)       │   │  → album fallback)          │   │                     │
   └───────────────┘   └────────────────────────────┘   └────────────────────┘
 ```
 
@@ -112,6 +113,19 @@ survive):
   `Tamil Movie` / `Movie Songs` noise
 - colon prefix: `Movie: Song …` → the pre-colon part is the movie.
 
+### 6b · Transform — `movie_from_album` (fallback)
+When the title carried **no** movie marker, fall back to the track's `album`
+column and promote it to `movie_album` **only if it names a film**:
+- `X (Original Motion Picture Soundtrack)` / `(Motion Picture Score)` /
+  `(Original Soundtrack)` → movie **X**
+- `Music from the Motion Picture X` / `From the Motion Picture "X"` → movie **X**
+
+A plain album (`Nine Track Mind`, `÷`, `Map of the Soul: 7`) is **never** promoted
+— it stays in `album` and `movie_album` is left empty. An explicit title marker
+from step 6 always wins over the album, so `Naatu Naatu (From "RRR")` on a
+mislabelled compilation album still resolves to **RRR**. This is what turns the
+Apple Music export's rich soundtrack albums into movie tags (see below).
+
 ### 7 · Transform — `extract_song`
 Extract `clean_song` using the first matching branch (in order):
 1. **From-movie** — text before the `From` clause.
@@ -165,13 +179,56 @@ every import.
 
 ---
 
+## Feeding the ETL: the Apple Music export
+
+The Apple Media Services export ("Get a copy of your data" → *Apple Media
+Services* at [privacy.apple.com](https://privacy.apple.com)) ships several CSVs;
+[`app/ingest/apple.py`](../app/ingest/apple.py) uses two of them, for different
+reasons:
+
+| File | Role | Why |
+|---|---|---|
+| **`Apple Music - Play History Daily Tracks.csv`** | tracks + plays | Only Apple file with the track's **artist** (`Track Description` = `"Artist - Title"`), plus a per-day **`Play Count`** and `Date Played`. |
+| **`Apple Music Play Activity.csv`** | album metadata only | Event-level log with `Song Name` + **`Album Name`** but *no* track artist — importing plays from it would label everything "Unknown", so it is used only to fill the `album` column. |
+
+Two details matter for accuracy:
+
+- **`Play Count` is honoured.** A song played 3× on one day becomes **3** play
+  events (at distinct within-day timestamps), not one — the same fix that keeps
+  counts like *Vaaste* honest. A row with a blank/zero count still counts as one
+  listen (the row exists because the track was engaged that day).
+- **Albums are matched precision-first.** A song title is enriched with an album
+  only when Play Activity maps it to *exactly one* album; ambiguous titles (seen
+  under two albums) are left alone rather than guessed. Those albums then feed
+  **step 6b**, which is how soundtracks like *"Vaaranam Aayiram (Original Motion
+  Picture Soundtrack)"* become the movie tag **Vaaranam Aayiram**.
+
+```python
+from app.ingest import apple
+apple.import_directory("/path/to/unzipped/Apple Media Services information")
+# or upload a single CSV via the Sources tab → POST /api/import/apple
+```
+
+`import_directory` folds both files into one pass; a single-file upload of Daily
+Tracks imports history, and a later upload of Play Activity back-fills albums on
+the tracks already present. Re-running is idempotent (plays are unique on
+`track_id, played_at, source`).
+
+---
+
 ## Precision notes & known limits
 
 - A bare `Song - ProperNoun` tail is only treated as a movie if it resolves to a
   known film; otherwise it is kept as part of the song and `movie_album` is left
   empty (poetic subtitles like *"The Kiss of Love"* are **not** misfiled as films).
 - Same-name collisions across different songs cannot be disambiguated from text
-  alone; the Deezer `album` (when a track is matched) is the more authoritative
-  movie/album source and can override the parsed value in a future pass.
+  alone. Where a track carries an `album` (from the Apple export, or Deezer
+  enrichment), a **soundtrack** album is the more authoritative movie source and
+  is applied by step 6b — but only for genuine film soundtracks, and only when
+  the title itself gave no marker.
+- The Play Activity album match is keyed on song title only (that file has no
+  artist), so two distinct songs sharing a title could receive the same album;
+  this is why only *unambiguous* title→album mappings are used, and why the
+  album must look like a soundtrack before it becomes a `movie_album`.
 - `is_short` / `is_non_music` are conservative flags for review, not automatic
   deletion — they let you filter Shorts and non-music out of analysis and stats.

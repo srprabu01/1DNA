@@ -76,6 +76,17 @@ _HANDLE_MAP = {"arrahman": "A.R. Rahman", "saiabhyankkar": "Sai Abhyankkar", "mc
 # or end of string.
 _FROM = re.compile(
     r"(?:[\(\[]|[-–—])\s*from\s+[\"“‘']?(?P<m>.+?)[\"”’']?\s*(?:[\)\]]|$)", re.I)
+
+# Album names from the Apple export carry the film explicitly, e.g.
+#   "Amaran (Original Motion Picture Soundtrack)"  -> movie "Amaran"
+#   "Music from the Motion Picture Barbie"          -> movie "Barbie"
+# Only these soundtrack/score forms qualify; a plain album (e.g. "Nine Track
+# Mind") is left as an album, never promoted to a movie.
+_OST_ALBUM = re.compile(
+    r"^(?P<m>.+?)\s*[\(\[]\s*(?:the\s+)?(?:original\s+)?(?:motion\s+picture\s+)?"
+    r"(?:soundtrack|score)\s*[\)\]]\s*$", re.I)
+_OST_FROM = re.compile(
+    r"^(?:music\s+)?from\s+the\s+motion\s+picture\s+[\"“'‘]?(?P<m>.+?)[\"”'’]?\s*$", re.I)
 _FEAT = re.compile(r"\s*[\(\[]?\s*(?:feat\.?|ft\.?|featuring|with)\b[^)\]]*[\)\]]?", re.I)
 _QUOTED_MV = re.compile(r"^(?P<a>.+?)\s*['\"‘“](?P<s>[^'\"’”]+)['\"’”]\s*(?:official\s*)?(?:m/?v|music\s*video)?", re.I)
 _VERSION_TAIL = re.compile(
@@ -124,6 +135,14 @@ def _clean_movie(m: str | None) -> str | None:
     m = _LANG_TAG.sub("", m).strip(" \"“”'‘’)]").strip()
     m = re.sub(r"\s{2,}", " ", m)
     return m or None
+
+
+def _movie_from_album(album: str | None) -> str | None:
+    """Pull a film name from an Apple soundtrack/score album, else None."""
+    if not album:
+        return None
+    m = _OST_ALBUM.match(album.strip()) or _OST_FROM.match(album.strip())
+    return _clean_movie(m.group("m")) if m else None
 
 
 def _looks_all_caps(s: str) -> bool:
@@ -206,7 +225,7 @@ def _extract_song_from_title(wt: str, from_matched: bool = False) -> str | None:
     return wt
 
 
-def normalize(title: str, artist: str) -> dict:
+def normalize(title: str, artist: str, album: str | None = None) -> dict:
     raw_t, raw_a = title or "", artist or ""
     blob = _fold(f"{raw_t} {raw_a}")
 
@@ -248,6 +267,10 @@ def normalize(title: str, artist: str) -> dict:
     else:
         song = _extract_song_from_title(wt, from_matched=bool(fm))
         artist_out = _resolve_artist(raw_a, wt, art_is_label, art_is_handle)
+
+    # 6b  fall back to the album for the film, when the title gave no marker.
+    if not movie:
+        movie = _movie_from_album(album)
 
     return {
         "clean_title": _finalize(song),
@@ -294,11 +317,11 @@ def _ensure_columns(con):
 def preview(limit: int = 60):
     """Dry-run: normalize a sample and return before/after rows. No writes."""
     with connect() as con:
-        rows = con.execute("SELECT id, title, artist FROM tracks ORDER BY RANDOM() LIMIT ?",
+        rows = con.execute("SELECT id, title, artist, album FROM tracks ORDER BY RANDOM() LIMIT ?",
                            (limit,)).fetchall()
     out = []
     for r in rows:
-        n = normalize(r["title"], r["artist"])
+        n = normalize(r["title"], r["artist"], r["album"])
         out.append({"id": r["id"], "raw_title": r["title"], "raw_artist": r["artist"], **n})
     return out
 
@@ -311,12 +334,12 @@ def run(con=None) -> dict:
     con = cm.__enter__() if own else con
     try:
         _ensure_columns(con)
-        rows = con.execute("SELECT id, title, artist FROM tracks").fetchall()
+        rows = con.execute("SELECT id, title, artist, album FROM tracks").fetchall()
         stats = {"total": len(rows), "renamed": 0, "movie_found": 0,
                  "shorts": 0, "non_music": 0}
         now = time.strftime("%Y-%m-%dT%H:%M:%S")
         for r in rows:
-            n = normalize(r["title"], r["artist"])
+            n = normalize(r["title"], r["artist"], r["album"])
             con.execute(
                 "UPDATE tracks SET clean_title=?, movie_album=?, is_short=?, "
                 "is_non_music=?, normalized_at=? WHERE id=?",
