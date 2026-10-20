@@ -232,3 +232,31 @@ the tracks already present. Re-running is idempotent (plays are unique on
   album must look like a soundtrack before it becomes a `movie_album`.
 - `is_short` / `is_non_music` are conservative flags for review, not automatic
   deletion — they let you filter Shorts and non-music out of analysis and stats.
+
+### Precision pass (2026-10)
+
+A 238-row name-by-name audit put clean_title at ~77% and pinpointed systematic
+misses; the following were fixed (0 regressions on the labelled set), lifting
+sampled precision to ~87%:
+
+- **`Artist - Song` no longer collapses to the artist.** The dash split now keeps
+  the *tail* when the head equals the artist field, and an ALL-CAPS / CJK artist
+  (LAUV, SZA, XXXTENTACION, NCT 127, EGOIST) is no longer mistaken for the song
+  when the title is already a clean song (no pipe / dash / video-noise).
+- **Leading "With" is no longer eaten.** The feat/ft clause only honours a bare
+  `with` inside a bracket, so *"With My Tears"*, *"With You"*, *"Here With Me"*
+  survive intact.
+- **`Full Video: <Song>` / `Lyrical: <Song>`** in the artist field now yield the
+  real song (the pure-noise prefix is discarded, not kept as the name).
+- **Album → movie** also accepts `(OST)`, TV / web-series soundtracks, and
+  `from the film/movie X`; garbage movie guesses (a credit list, the song itself,
+  a 1–2 char fragment) are rejected.
+- **Non-music gate** now also catches playlists, listicles (`Top 10 …`) and
+  `… Special Collections` compilations; a confirmed non-music row is left with a
+  null `clean_title` (it has no single song to name).
+
+**Known remaining limits (left for precision):** a `FILM | SONG` pipe-title whose
+song sits in the artist field is not auto-swapped (the film can end up as the
+title), and a song named only in native script is kept in that script even when a
+romanisation exists elsewhere in the row. Both are recall gaps, never wrong
+guesses.
